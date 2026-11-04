@@ -95,6 +95,8 @@ h2.label{font:600 1.45rem/1.2 var(--display)}
 .player button{min-width:72px;min-height:44px;padding:0 .75rem;background:var(--raised);border:1px solid var(--line);font-weight:600}
 .zoom{min-height:44px;padding:0 .75rem;margin-top:.5rem;background:var(--raised);border:1px solid var(--line);font-weight:600}
 .zoom[hidden]{display:none}
+.livebtn{display:inline-flex;align-items:center;color:var(--text);text-decoration:none}
+.livebtn[hidden]{display:none}
 .strip{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:2px;margin-top:.45rem}
 .strip div{text-align:center;font-size:.72rem;color:var(--muted)}
 .strip i{display:grid;place-items:center;height:38px;margin-bottom:.15rem;font:600 1.05rem var(--display)}
@@ -137,6 +139,7 @@ footer a{color:inherit}
     <p class="reason" id="reason"></p>
     <div id="clock"></div>
     <p class="count" id="count"></p>
+    <a class="zoom livebtn" id="live" href="https://f1-dash.com/" target="_blank" rel="noopener" hidden>Live timing openen</a>
     <p class="reason" id="actual" hidden></p>
     <div id="changes"></div>
     <button class="zoom" id="notify" type="button" hidden>Meldingen aan</button>
@@ -171,7 +174,7 @@ footer a{color:inherit}
 
   <footer>
     <p id="updated"></p>
-    <p>De bandenkeuze is een eigen vuistregel op basis van de weersverwachting, geen teaminformatie. Weer: <a href="https://open-meteo.com/">Open-Meteo</a> (modellen van ECMWF, NOAA en DWD). Weather data by <a href="https://www.rainviewer.com/">RainViewer</a>. Kaart: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bijdragers. Circuitlijnen: <a href="https://github.com/bacinger/f1-circuits">f1-circuits</a> van Tomislav Bacinger (MIT), niet officieel. Gemeten sessieweer: <a href="https://openf1.org/">OpenF1</a>, niet officieel. Sessietijden gecontroleerd op 4 november 2026.</p>
+    <p>De bandenkeuze is een eigen vuistregel op basis van de weersverwachting, geen teaminformatie. Weer: <a href="https://open-meteo.com/">Open-Meteo</a> (modellen van ECMWF, NOAA en DWD). Weather data by <a href="https://www.rainviewer.com/">RainViewer</a>. Kaart: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bijdragers. Circuitlijnen: <a href="https://github.com/bacinger/f1-circuits">f1-circuits</a> van Tomislav Bacinger (MIT), niet officieel. Live timing: <a href="https://f1-dash.com/">f1-dash</a>, niet officieel. Gemeten sessieweer: <a href="https://openf1.org/">OpenF1</a>, niet officieel. Sessietijden gecontroleerd op 4 november 2026.</p>
   </footer>
 </main>
 
@@ -299,7 +302,11 @@ function render(){
   loadActual(r,s);
   $("times").innerHTML=r.sessions.map(x=>`<tr><th scope="row">${x.short}</th><td>${dayName(x.start,myTz)} ${clock(x.start,myTz)}</td><td>${dayName(x.start,r.tz)} ${clock(x.start,r.tz)}</td></tr>`).join("");
 }
-const tick=()=>{ $("count").textContent=countdown(state.session); };
+const tick=()=>{
+  $("count").textContent=countdown(state.session);
+  const now=Date.now();
+  $("live").hidden=!state.race.sessions.some(x=>now>=x.start-15*6e4&&now<=x.end+15*6e4);
+};
 
 function drawChart(){
   const box=$("chart"),r=state.race,wx=state.wx[r.id];
