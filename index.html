@@ -60,7 +60,8 @@ h1,h2,p{margin:0}
 .record b{color:var(--text);font:600 1.15rem var(--display);margin-right:.25rem}
 .toast{position:fixed;left:1rem;right:1rem;bottom:calc(1rem + env(safe-area-inset-bottom,0px));z-index:1000;max-width:32rem;margin:0 auto;padding:.85rem 1rem;background:var(--tyre);color:#fff;border-left:4px solid var(--slick);font-weight:600}
 .toast[hidden]{display:none}
-#bigTyre{cursor:pointer}
+#bigTyre{cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+#bigTyre svg{display:block;pointer-events:none}
 h1{font:700 clamp(3.25rem,15vw,5.5rem)/.95 var(--display);margin-top:.9rem}
 .sub{color:var(--muted)}
 .sessions{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin-top:1.1rem;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
@@ -595,7 +596,7 @@ function chooseRace(r,s){
 let tyreTaps=0,tapTimer,toastTimer;
 function tyreJoke(){
   clearTimeout(tapTimer); tapTimer=setTimeout(()=>{ tyreTaps=0; },3000);
-  if(++tyreTaps<5) return;
+  if(++tyreTaps<3) return;
   tyreTaps=0;
   const t=$("toast");
   t.textContent="Box box! Deze app is van lola-cola432. Gaat de voorspelling mis? Dan waren het de wolken.";
@@ -603,7 +604,6 @@ function tyreJoke(){
   clearTimeout(toastTimer); toastTimer=setTimeout(()=>{ t.hidden=true; },5000);
 }
 document.addEventListener("click",e=>{
-  if(e.target.closest("#bigTyre")) tyreJoke();
   const race=e.target.closest("[data-race]"),ses=e.target.closest("[data-session]");
   if(race) chooseRace(RACES.find(x=>x.id===race.dataset.race));
   else if(ses){ state.session=state.race.sessions.find(x=>x.id===ses.dataset.session); render(); }
@@ -612,6 +612,7 @@ document.addEventListener("click",e=>{
   else if(e.target.id==="notify") Notification.requestPermission().then(setupNotify);
   else if(e.target.id==="play"){ if(state.frames.length) setPlaying(!state.playing); }
 });
+$("bigTyre").addEventListener("pointerup",tyreJoke);
 $("frame").addEventListener("input",e=>{ setPlaying(false); showFrame(+e.target.value); });
 addEventListener("resize",()=>{ drawChart(); if(map) map.invalidateSize(); });
 document.addEventListener("visibilitychange",()=>{
