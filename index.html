@@ -21,7 +21,7 @@
   color-scheme:light;
   --bg:#E7EAEC; --raised:#F6F7F8; --line:#C6CDD3; --text:#181D22; --muted:#55616C;
   --slick:#D92B22; --inter:#1F9244; --wet:#1670C4; --doubt:#B98A00; --rain:#1670C4;
-  --tyre:#1B1F23; --session:rgba(24,29,34,.15);
+  --tyre:#1B1F23; --session:rgba(24,29,34,.15); --on-rain:#fff;
   --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
   --body:Barlow,system-ui,-apple-system,"Segoe UI",sans-serif;
   box-sizing:border-box;
@@ -33,7 +33,7 @@
     color-scheme:dark;
     --bg:#20262C; --raised:#2A3138; --line:#434D57; --text:#EFF2F4; --muted:#AAB5BE;
     --slick:#F0483E; --inter:#3CC469; --wet:#4AA3F0; --doubt:#F2C230; --rain:#4AA3F0;
-    --tyre:#101316; --session:rgba(239,242,244,.17);
+    --tyre:#101316; --session:rgba(239,242,244,.17); --on-rain:#0D1B26;
   }
 }
 *,*::before,*::after{box-sizing:inherit}
@@ -80,6 +80,7 @@ h1{font:700 clamp(3.25rem,15vw,5.5rem)/.95 var(--display);margin-top:.9rem}
 #track svg{display:block;height:132px;width:auto;max-width:46vw}
 h2.label{font:600 1.45rem/1.2 var(--display)}
 .note{color:var(--muted);font-size:.875rem}
+.windhead{display:block;color:var(--text);font-weight:600;font-size:1rem}
 .chart{margin-top:.5rem;width:100%}
 .chart svg{display:block;width:100%;height:auto}
 .chart text{font-family:var(--body);fill:var(--muted);font-size:12px}
@@ -96,8 +97,9 @@ h2.label{font:600 1.45rem/1.2 var(--display)}
 .zoom[hidden]{display:none}
 .strip{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:2px;margin-top:.45rem}
 .strip div{text-align:center;font-size:.72rem;color:var(--muted)}
-.strip i{display:block;height:26px;margin-bottom:.15rem;background:var(--session)}
-.strip .in i{box-shadow:inset 0 -3px 0 var(--text)}
+.strip i{display:grid;place-items:center;height:38px;margin-bottom:.15rem;font:600 1.05rem var(--display)}
+.strip .in i{box-shadow:inset 0 -4px 0 var(--text)}
+.strip .in{color:var(--text);font-weight:600}
 .clockline{font-weight:600;margin-top:.8rem}
 .change{background:var(--raised);border-left:4px solid var(--wet);padding:.6rem .85rem;margin-top:.75rem}
 .player input{width:100%;min-height:44px;accent-color:var(--wet)}
@@ -146,7 +148,7 @@ footer a{color:inherit}
     <div class="head"><h2 class="label">Regen over het weekend</h2><div id="track"></div></div>
     <p class="note" id="windNote" hidden></p>
     <div class="chart" id="chart"></div>
-    <div class="legend"><span><i></i>mm regen per uur</span><span><i class="l"></i>kans op regen</span><span>Tijdas in UTC</span></div>
+    <div class="legend"><span><i></i>mm regen per uur</span><span><i class="l"></i>kans op regen</span><span>Tijden in jouw tijdzone</span></div>
   </section>
 
   <section class="radar">
@@ -302,7 +304,9 @@ const tick=()=>{ $("count").textContent=countdown(state.session); };
 function drawChart(){
   const box=$("chart"),r=state.race,wx=state.wx[r.id];
   const W=Math.max(300,box.clientWidth||340),H=190,top=24,bottom=24,base=H-bottom;
-  const x0=Math.floor(r.sessions[0].start/DAY)*DAY,x1=Math.ceil((r.sessions[4].end+HOUR)/DAY)*DAY;
+  const midnight=t=>{ const d=new Date(t); d.setHours(0,0,0,0); return d.getTime(); };
+  const nextDay=t=>{ const d=new Date(t); d.setDate(d.getDate()+1); d.setHours(0,0,0,0); return d.getTime(); };
+  const x0=midnight(r.sessions[0].start),x1=nextDay(r.sessions[4].end);
   const X=t=>(t-x0)/(x1-x0)*W, inner=base-top;
   let g="";
   r.sessions.forEach((s,i)=>{
@@ -320,9 +324,12 @@ function drawChart(){
     });
     if(line) g+=`<path d="${line}" fill="none" stroke="var(--doubt)" stroke-width="2"/>`;
   }
-  for(let t=x0;t<x1;t+=DAY){
+  for(let t=x0;t<x1;t=nextDay(t)){
+    const noon=new Date(t); noon.setHours(12,0,0,0);
     g+=`<line x1="${X(t)}" x2="${X(t)}" y1="${top}" y2="${base}" stroke="var(--line)"/>`;
-    g+=`<text x="${X(t)+4}" y="${H-7}">${fmt("UTC",{weekday:"short",day:"numeric"}).format(t)}</text>`;
+    g+=`<line x1="${X(noon.getTime())}" x2="${X(noon.getTime())}" y1="${base}" y2="${base+5}" stroke="var(--line)"/>`;
+    g+=`<text x="${X(t)+4}" y="${H-7}">${fmt(myTz,{weekday:"short",day:"numeric"}).format(t)}</text>`;
+    g+=`<text x="${X(noon.getTime())}" y="${H-7}" text-anchor="middle">12:00</text>`;
   }
   g+=`<line x1="0" x2="${W}" y1="${base}" y2="${base}" stroke="var(--line)"/>`;
   const now=Date.now();
@@ -343,8 +350,11 @@ function rainClock(s,wx){
     const when=first.t+HOUR<=s.start?`, ${Math.max(1,Math.floor((s.start-first.t)/HOUR))} uur voor de start`:first.t>=s.end?", na de sessie":", tijdens de sessie";
     line=`Regen mogelijk tussen ${clock(first.t,myTz)} en ${clock(first.t+HOUR,myTz)}${when}.`;
   }
-  const cells=slots.map(x=>`<div class="${x.t+HOUR>s.start&&x.t<s.end?"in":""}"><i style="background:color-mix(in srgb,var(--rain) ${Math.round(x.chance)}%,var(--session))"></i>${clock(x.t,myTz).slice(0,2)}</div>`).join("");
-  box.innerHTML=`<p class="clockline">${line}</p><div class="strip" aria-hidden="true">${cells}</div>`;
+  const cells=slots.map(x=>{
+    const c=Math.round(x.chance),on=c>=55;
+    return `<div class="${x.t+HOUR>s.start&&x.t<s.end?"in":""}"><i style="background:color-mix(in srgb,var(--rain) ${Math.max(c,6)}%,var(--raised));color:${on?"var(--on-rain)":"var(--text)"}">${c}%</i>${clock(x.t,myTz).slice(0,2)}:00</div>`;
+  }).join("");
+  box.innerHTML=`<p class="clockline">${line}</p><div class="strip" role="img" aria-label="Regenkans per uur rond de sessie">${cells}</div><p class="note">Regenkans per uur. De zwarte streep is de sessie.</p>`;
 }
 
 const KEY=(r,s)=>`${r.id}/${s.id}`;
@@ -434,10 +444,10 @@ function drawTrack(){
     }
     g+=`<path d="M${sx(pts[i])} ${sy(pts[i])}L${sx(pts[i+1])} ${sy(pts[i+1])}" stroke="${color}"/>`;
   }
-  const arrow=sum?`<g transform="translate(13 13) rotate(${sum.dir+180})"><path d="M0-10 6 8 0 4-6 8z" fill="currentColor"/></g>`:"";
-  $("track").innerHTML=`<svg viewBox="0 0 ${VW} ${VH}" role="img" aria-label="Baanlayout van ${r.circuit}"><g fill="none" stroke-width="3" stroke-linecap="round">${g}</g>${arrow}</svg>`;
+  $("track").innerHTML=`<svg viewBox="0 0 ${VW} ${VH}" role="img" aria-label="Baanlayout van ${r.circuit}"><g fill="none" stroke-width="3" stroke-linecap="round">${g}</g></svg>`;
   $("windNote").hidden=!sum;
-  $("windNote").textContent=windy?"Groen is meewind, rood is tegenwind en grijs is zijwind, met één windwaarde voor de hele baan.":"Weinig wind verwacht tijdens deze sessie.";
+  const windHead=sum?`<span class="windhead"><svg class="arrow" viewBox="0 0 24 24" style="transform:rotate(${sum.dir+180}deg)" aria-hidden="true"><path fill="currentColor" d="M12 1 20 22 12 17 4 22z"/></svg> Wind uit ${compass(sum.dir)}, ${num(sum.wind)} km/u</span>`:"";
+  $("windNote").innerHTML=windHead+(windy?" Groen is meewind, rood tegenwind en grijs zijwind. Dit is één windwaarde voor de hele baan.":" Daarom is de baan grijs: er is weinig wind.");
 }
 async function loadTracks(){
   state.tracks=saved("tracks");
