@@ -56,6 +56,11 @@ h1,h2,p{margin:0}
 .races::-webkit-scrollbar{display:none}
 .races button{flex:none;min-height:44px;padding:0 .75rem;color:var(--muted);font-weight:500;border-bottom:3px solid transparent}
 .races button[aria-pressed=true]{color:var(--text);border-bottom-color:var(--text)}
+.record{margin-top:.2rem;color:var(--muted);font-size:.9rem}
+.record b{color:var(--text);font:600 1.15rem var(--display);margin-right:.25rem}
+.toast{position:fixed;left:1rem;right:1rem;bottom:calc(1rem + env(safe-area-inset-bottom,0px));z-index:1000;max-width:32rem;margin:0 auto;padding:.85rem 1rem;background:var(--tyre);color:#fff;border-left:4px solid var(--slick);font-weight:600}
+.toast[hidden]{display:none}
+#bigTyre{cursor:pointer}
 h1{font:700 clamp(3.25rem,15vw,5.5rem)/.95 var(--display);margin-top:.9rem}
 .sub{color:var(--muted)}
 .sessions{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin-top:1.1rem;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
@@ -128,6 +133,7 @@ footer a{color:inherit}
     <nav class="races" id="races" aria-label="Kies een Grand Prix"></nav>
     <h1 id="title"></h1>
     <p class="sub" id="sub"></p>
+    <p class="record" id="record"></p>
     <div class="sessions" id="sessions" role="group" aria-label="Kies een sessie"></div>
   </section>
 
@@ -174,9 +180,11 @@ footer a{color:inherit}
 
   <footer>
     <p id="updated"></p>
+    <p>Gemaakt door lola-cola432, hoofd Natte Vingers en Bandenadvies.</p>
     <p>De bandenkeuze is een eigen vuistregel op basis van de weersverwachting, geen teaminformatie. Weer: <a href="https://open-meteo.com/">Open-Meteo</a> (modellen van ECMWF, NOAA en DWD). Weather data by <a href="https://www.rainviewer.com/">RainViewer</a>. Kaart: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bijdragers. Circuitlijnen: <a href="https://github.com/bacinger/f1-circuits">f1-circuits</a> van Tomislav Bacinger (MIT), niet officieel. Live timing: <a href="https://f1-dash.com/">f1-dash</a>, niet officieel. Gemeten sessieweer: <a href="https://openf1.org/">OpenF1</a>, niet officieel. Sessietijden gecontroleerd op 4 november 2026.</p>
   </footer>
 </main>
+<div class="toast" id="toast" role="status" hidden></div>
 
 <script>
 "use strict";
@@ -199,6 +207,12 @@ const RACES = [
 ];
 const TRACKS = {"sao-paulo":"br-1940","las-vegas":"us-2023","qatar":"qa-2004","abu-dhabi":"ae-2009"};
 const CCW = {"sao-paulo":true,"las-vegas":true,"qatar":false,"abu-dhabi":true};
+const RECORDS = {
+  "sao-paulo":["1:10.540","Valtteri Bottas",2018],
+  "las-vegas":["1:33.365","Max Verstappen",2025],
+  "qatar":["1:22.384","Lando Norris",2024],
+  "abu-dhabi":["1:25.637","Kevin Magnussen",2024]
+};
 const $ = id => document.getElementById(id);
 const HOUR = 36e5, DAY = 864e5, HORIZON = 15 * DAY;
 const MODELS = ["ecmwf_ifs025","gfs_seamless","icon_seamless"];
@@ -274,6 +288,8 @@ function render(){
   document.title=`${r.name}: ${s.short}`;
   $("title").textContent=r.name;
   $("sub").textContent=`${r.circuit}, ronde ${r.round}`;
+  const rec=RECORDS[r.id];
+  $("record").innerHTML=`<b>${rec[0]}</b> Snelste raceronde: ${rec[1]} (${rec[2]})`;
   $("races").innerHTML=RACES.map(x=>`<button type="button" data-race="${x.id}" aria-pressed="${x===r}">${x.name}</button>`).join("");
   $("sessions").innerHTML=r.sessions.map(x=>{
     const sum=summarize(x,wx);
@@ -576,7 +592,18 @@ function chooseRace(r,s){
   if(!state.wx[r.id]) { const o=saved(r.id); if(o){ state.wx[r.id]=o; render(); } }
   loadWeather(r);
 }
+let tyreTaps=0,tapTimer,toastTimer;
+function tyreJoke(){
+  clearTimeout(tapTimer); tapTimer=setTimeout(()=>{ tyreTaps=0; },3000);
+  if(++tyreTaps<5) return;
+  tyreTaps=0;
+  const t=$("toast");
+  t.textContent="Box box! Deze app is van lola-cola432. Gaat de voorspelling mis? Dan waren het de wolken.";
+  t.hidden=false;
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>{ t.hidden=true; },5000);
+}
 document.addEventListener("click",e=>{
+  if(e.target.closest("#bigTyre")) tyreJoke();
   const race=e.target.closest("[data-race]"),ses=e.target.closest("[data-session]");
   if(race) chooseRace(RACES.find(x=>x.id===race.dataset.race));
   else if(ses){ state.session=state.race.sessions.find(x=>x.id===ses.dataset.session); render(); }
