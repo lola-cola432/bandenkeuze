@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bandenkeuze: F1-weer per sessie</title>
+<meta name="description" content="Per F1-sessie zien welke banden het weer waarschijnlijk vraagt, met live regenradar.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Bandenkeuze">
+<meta name="theme-color" content="#0C1118">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" media="print" onload="this.media='all'">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0C1118; --raised:#151C26; --line:#2A3442; --text:#EEF2F6; --muted:#AAB6C4;
+  --slick:#FF5A4F; --inter:#3DD68C; --wet:#4CA8FF; --doubt:#FFC93C; --rain:#4CA8FF;
+  --tyre:#05070A; --session:rgba(238,242,246,.14); --on-rain:#07121D;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:Barlow,system-ui,-apple-system,"Segoe UI",sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{box-sizing:inherit}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:400 1rem/1.5 var(--body);font-variant-numeric:tabular-nums}
+button,input{font:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer;padding:0}
+:focus-visible{outline:3px solid var(--wet);outline-offset:2px}
+h1,h2,p{margin:0}
+.app{max-width:1120px;margin:0 auto;padding:1rem 1rem 2.5rem;display:grid;gap:1.75rem}
+@media (min-width:900px){
+  .app{grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:2.5rem;padding-top:1.75rem}
+  .top,.call,.trackbox,.techblock,.predblock,.liveblock,.graph{grid-column:1}
+  .radar{grid-column:2;grid-row:1 / span 7;position:sticky;top:1rem;align-self:start}
+  .times,footer{grid-column:1 / -1}
+  .radar #map{height:min(70vh,620px)}
+}
+.races{display:flex;gap:.25rem;overflow-x:auto;scrollbar-width:none;margin:0 -1rem;padding:0 1rem}
+.races::-webkit-scrollbar{display:none}
+.races button{flex:none;min-height:44px;padding:0 .75rem;color:var(--muted);font-weight:500;border-bottom:3px solid transparent}
+.races button[aria-pressed=true]{color:var(--text);border-bottom-color:var(--text)}
+.record{margin-top:.6rem;color:var(--muted);font-size:.85rem;line-height:1.35}
+.record b{display:block;color:var(--text);font:600 1.4rem/1.1 var(--display)}
+.toast{position:fixed;left:1rem;right:1rem;bottom:calc(1rem + env(safe-area-inset-bottom,0px));z-index:1000;max-width:32rem;margin:0 auto;padding:.85rem 1rem;background:var(--tyre);color:#fff;border-left:4px solid var(--slick);font-weight:600}
+.toast[hidden]{display:none}
+#bigTyre{cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+#bigTyre svg{display:block;pointer-events:none}
+h1{font:700 clamp(2.6rem,12vw,4rem)/1 var(--display);margin-top:.15rem}
+.sub{color:var(--muted)}
+.sessions{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin-top:1.1rem;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.sessions button{display:flex;flex-direction:column;align-items:center;gap:.2rem;padding:.65rem .1rem .55rem;min-height:44px;position:relative}
+.sessions b{font:600 1.05rem/1.1 var(--display)}
+.sessions small{color:var(--muted);font-size:.74rem;line-height:1.15}
+.sessions button[aria-pressed=true]{background:var(--raised)}
+.sessions button[aria-pressed=true]::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--text)}
+.sessions .past{opacity:.6}
+.verdict{display:grid;grid-template-columns:auto minmax(0,1fr);gap:1rem;align-items:center}
+.verdict h2{font:700 clamp(2rem,9vw,3.4rem)/1 var(--display);overflow-wrap:anywhere}
+.when{font-weight:600}
+.reason{margin-top:.8rem;max-width:62ch}
+.count{margin-top:.25rem;color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:.5rem -1rem 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.stats div{padding:.55rem .5rem .5rem 1rem;border-left:1px solid var(--line);min-width:0}
+.stats div:first-child{border-left:0}
+.stats dt{order:2;color:var(--muted);font-size:.75rem}
+.stats dd{margin:0;font:600 1.5rem/1.1 var(--display)}
+.stats dd span{font-size:.85rem;font-weight:500}
+.arrow{display:inline-block;width:.8em;height:.8em;vertical-align:-.04em}
+#track svg{display:block;width:100%;height:auto}
+.brand{font:700 1.5rem/1 var(--display);letter-spacing:.02em;margin-bottom:.6rem}
+.status{margin-top:1rem;font-weight:600;font-size:.9rem}
+.verdictbox{background:var(--raised);padding:1rem}
+.trackbox{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1rem;align-items:center}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);margin:.5rem 0 0;border:1px solid var(--line)}
+.facts div{background:var(--bg);padding:.55rem .65rem;min-width:0}
+.facts dt{color:var(--muted);font-size:.78rem}
+.facts dd{margin:0;font:600 1.3rem/1.15 var(--display)}
+.techblock h3{margin:1rem 0 0;font:600 1.1rem/1.2 var(--display)}
+.windline{margin-top:.5rem;font-size:.9rem}
+.preds{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin-top:.5rem}
+.preds h3{margin:0 0 .25rem;font:600 1.1rem var(--display)}
+.preds ol{margin:0;padding:0;list-style:none}
+.preds li{display:flex;justify-content:space-between;gap:.4rem;padding:.35rem 0;border-top:1px solid var(--line);font-size:.9rem}
+.preds b{font:600 1.1rem var(--display)}
+.links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.4rem;margin-top:.5rem}
+.links a{min-height:44px;display:flex;align-items:center;justify-content:center;background:var(--raised);border:1px solid var(--line);color:var(--text);font-weight:600;font-size:.9rem;text-decoration:none}
+.liveblock.on .links a{border-color:var(--inter)}
+h2.label{font:600 1.45rem/1.2 var(--display)}
+.note{color:var(--muted);font-size:.875rem}
+.windhead{display:block;color:var(--text);font-weight:600;font-size:1rem}
+.chart{margin-top:.5rem;width:100%}
+.chart svg{display:block;width:100%;height:auto}
+.chart text{font-family:var(--body);fill:var(--muted);font-size:12px}
+.chart .band{fill:var(--session);cursor:pointer}
+.chart .band.on{fill:none;stroke:var(--text);stroke-width:2}
+.chart .bandlabel{fill:var(--text);font:600 13px var(--display)}
+.legend{display:flex;gap:1rem;flex-wrap:wrap;color:var(--muted);font-size:.82rem;margin-top:.25rem}
+.legend i{display:inline-block;width:.9rem;height:.6rem;margin-right:.3rem;background:var(--rain)}
+.legend i.l{height:2px;vertical-align:.2em;background:var(--doubt)}
+#map{height:62vw;min-height:280px;max-height:460px;margin-top:.5rem;background:var(--raised);z-index:0}
+.player{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.75rem;align-items:center;margin-top:.5rem}
+.player button{min-width:72px;min-height:44px;padding:0 .75rem;background:var(--raised);border:1px solid var(--line);font-weight:600}
+.zoom{min-height:44px;padding:0 .75rem;margin-top:.5rem;background:var(--raised);border:1px solid var(--line);font-weight:600}
+.zoom[hidden]{display:none}
+.strip{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:2px;margin-top:.45rem}
+.strip div{text-align:center;font-size:.72rem;color:var(--muted)}
+.strip i{display:grid;place-items:center;height:38px;margin-bottom:.15rem;font:600 1.05rem var(--display)}
+.strip .in i{box-shadow:inset 0 -4px 0 var(--text)}
+.strip .in{color:var(--text);font-weight:600}
+.clockline{font-weight:600;margin-top:.8rem}
+.change{background:var(--raised);border-left:4px solid var(--wet);padding:.6rem .85rem;margin-top:.75rem}
+.player input{width:100%;min-height:44px;accent-color:var(--wet)}
+.stamp{min-width:3.2rem;text-align:right;font-weight:600}
+table{border-collapse:collapse;width:100%;margin-top:.5rem}
+th{font-weight:500;color:var(--muted);text-align:left;font-size:.82rem}
+th,td{padding:.45rem .5rem .45rem 0;border-bottom:1px solid var(--line)}
+tbody th{color:var(--text);font:600 1.05rem var(--display)}
+.problem{background:var(--raised);border-left:4px solid var(--doubt);padding:.7rem .85rem;margin-top:1rem}
+.problem button{display:block;margin-top:.4rem;min-height:44px;font-weight:600;text-decoration:underline}
+footer{color:var(--muted);font-size:.82rem;max-width:80ch}
+footer a{color:inherit}
+.dark-tiles{filter:invert(1) hue-rotate(180deg) brightness(.9)}
+.leaflet-container{font-family:var(--body)}
+@media (prefers-reduced-motion:no-preference){
+  .tyre-big{animation:roll .7s ease-out}
+  @keyframes roll{from{transform:rotate(-150deg)}to{transform:none}}
+}
+</style>
+</head>
+<body>
+<main class="app">
+  <section class="top">
+    <div class="brand">BANDENKEUZE</div>
+    <nav class="races" id="races" aria-label="Kies een Grand Prix"></nav>
+    <dl class="stats" id="stats"></dl>
+    <p class="status" id="status"></p>
+    <h1 id="title"></h1>
+    <p class="sub" id="sub"></p>
+    <div class="sessions" id="sessions" role="group" aria-label="Kies een sessie"></div>
+  </section>
+
+  <section class="call" aria-live="polite">
+    <div class="verdictbox">
+      <div class="verdict">
+        <div id="bigTyre"></div>
+        <div><p class="when" id="when"></p><h2 id="verdict"></h2></div>
+      </div>
+      <p class="reason" id="reason"></p>
+    </div>
+    <div id="clock"></div>
+    <p class="count" id="count"></p>
+    <p class="reason" id="actual" hidden></p>
+    <div id="changes"></div>
+    <button class="zoom" id="notify" type="button" hidden>Meldingen aan</button>
+    <div id="problem"></div>
+  </section>
+
+  <section class="trackbox">
+    <div id="track"></div>
+    <div>
+      <h2 class="label">Baan en wind</h2>
+      <p class="note" id="windNote" hidden></p>
+      <p class="record" id="record"></p>
+    </div>
+  </section>
+
+  <section class="techblock">
+    <h2 class="label">Techniek</h2>
+    <dl class="facts" id="techAir"></dl>
+    <div id="techWind"></div>
+    <h3>Circuit</h3>
+    <dl class="facts" id="techTrack"></dl>
+  </section>
+
+  <section class="predblock">
+    <h2 class="label">Top 3-indicatie</h2>
+    <div id="predict"></div>
+  </section>
+
+  <section class="liveblock">
+    <h2 class="label">Live tijdens de sessie</h2>
+    <p class="note" id="liveNote"></p>
+    <div class="links">
+      <a href="https://f1cosmos.com/dashboard/live" target="_blank" rel="noopener">F1 Cosmos</a>
+      <a href="https://f1livedata.com/laptimes" target="_blank" rel="noopener">F1 Live Data</a>
+      <a href="https://f1-dash.com/" target="_blank" rel="noopener">f1-dash</a>
+    </div>
+  </section>
+
+  <section class="graph">
+    <h2 class="label">Regen over het weekend</h2>
+    <div class="chart" id="chart"></div>
+    <div class="legend"><span><i></i>mm regen per uur</span><span><i class="l"></i>kans op regen</span><span>Tijden in jouw tijdzone</span></div>
+  </section>
+
+  <section class="radar">
+    <h2 class="label">Regenradar</h2>
+    <p class="note">De afgelopen twee uur, per tien minuten. De ringen liggen op 25, 50 en 100 km.</p>
+    <div id="map"></div>
+    <div class="player">
+      <button id="play" type="button">Speel af</button>
+      <input id="frame" type="range" min="0" max="0" value="0" aria-label="Radarbeeld kiezen">
+      <span class="stamp" id="stamp">--:--</span>
+    </div>
+    <button class="zoom" id="zoom" type="button" hidden>Zoom in op circuit</button>
+    <p class="note" id="radarNote"></p>
+  </section>
+
+  <section class="times">
+    <h2 class="label">Tijden</h2>
+    <table><thead><tr><th>Sessie</th><th>Jouw tijd</th><th>Op het circuit</th></tr></thead><tbody id="times"></tbody></table>
+  </section>
+
+  <footer>
+    <p id="updated"></p>
+    <p>Gemaakt door lola-cola432, hoofd Natte Vingers en Bandenadvies.</p>
+    <p>De bandenkeuze is een eigen vuistregel op basis van de weersverwachting en de top 3 een rangschikking op rondetijden, geen teaminformatie of officiële voorspelling. Weer: <a href="https://open-meteo.com/">Open-Meteo</a> (modellen van ECMWF, NOAA en DWD). Weather data by <a href="https://www.rainviewer.com/">RainViewer</a>. Kaart: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bijdragers. Circuitlijnen: <a href="https://github.com/bacinger/f1-circuits">f1-circuits</a> van Tomislav Bacinger (MIT), niet officieel. Live-links: F1 Cosmos, F1 Live Data en f1-dash, niet officieel en niet van Bandenkeuze. Gemeten sessieweer: <a href="https://openf1.org/">OpenF1</a>, niet officieel. Sessietijden gecontroleerd op 4 november 2026.</p>
+  </footer>
+</main>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+"use strict";
+const S = (id,label,short,utc,mins) => ({id,label,short,start:Date.parse(utc),end:Date.parse(utc)+mins*6e4});
+const weekend = (d1,d2,d3,t) => [
+  S("fp1","Vrije training 1","VT1",`${d1}T${t[0]}:00Z`,60),
+  S("fp2","Vrije training 2","VT2",`${d1}T${t[1]}:00Z`,60),
+  S("fp3","Vrije training 3","VT3",`${d2}T${t[2]}:00Z`,60),
+  S("q","Kwalificatie","Kwali",`${d2}T${t[3]}:00Z`,60),
+  S("r","Race","Race",`${d3}T${t[4]}:00Z`,120)];
+const RACES = [
+  {id:"sao-paulo",round:20,name:"São Paulo",circuit:"Interlagos",lat:-23.7036,lon:-46.6997,tz:"America/Sao_Paulo",
+   sessions:weekend("2026-11-06","2026-11-07","2026-11-08",["15:30","19:00","14:30","18:00","17:00"])},
+  {id:"las-vegas",round:21,name:"Las Vegas",circuit:"Las Vegas Strip",lat:36.1147,lon:-115.1728,tz:"America/Los_Angeles",
+   sessions:weekend("2026-11-20","2026-11-21","2026-11-22",["00:30","04:00","00:30","04:00","04:00"])},
+  {id:"qatar",round:22,name:"Qatar",circuit:"Lusail",lat:25.49,lon:51.4542,tz:"Asia/Qatar",
+   sessions:weekend("2026-11-27","2026-11-28","2026-11-29",["13:30","17:00","14:30","18:00","16:00"])},
+  {id:"abu-dhabi",round:23,name:"Abu Dhabi",circuit:"Yas Marina",lat:24.4672,lon:54.6031,tz:"Asia/Dubai",
+   sessions:weekend("2026-12-04","2026-12-05","2026-12-06",["09:30","13:00","10:30","14:00","13:00"])}
+];
+const TRACKS = {"sao-paulo":"br-1940","las-vegas":"us-2023","qatar":"qa-2004","abu-dhabi":"ae-2009"};
+const CCW = {"sao-paulo":true,"las-vegas":true,"qatar":false,"abu-dhabi":true};
+const RECORDS = {
+  "sao-paulo":["1:10.540","Valtteri Bottas",2018],
+  "las-vegas":["1:33.365","Max Verstappen",2025],
+  "qatar":["1:22.384","Lando Norris",2024],
+  "abu-dhabi":["1:25.637","Kevin Magnussen",2024]
+};
+const $ = id => document.getElementById(id);
+const HOUR = 36e5, DAY = 864e5, HORIZON = 15 * DAY;
+const MODELS = ["ecmwf_ifs025","gfs_seamless","icon_seamless"];
+const CALLS = {
+  slick:{title:"Slicks",text:"Droog verwacht"},
+  doubt:{title:"Slicks of inters",text:"Twijfelgeval"},
+  inter:{title:"Inters",text:"Natte baan mogelijk"},
+  wet:{title:"Regenbanden",text:"Flinke regen verwacht"},
+  none:{title:"Nog te vroeg",text:"Nog geen verwachting"}
+};
+const state = {race:null,session:null,wx:{},failed:false,frames:[],frame:0,playing:null};
+
+const fmt = (tz,o) => new Intl.DateTimeFormat("nl-NL",{timeZone:tz,...o});
+const clock = (t,tz) => fmt(tz,{hour:"2-digit",minute:"2-digit"}).format(t);
+const dayName = (t,tz) => fmt(tz,{weekday:"short"}).format(t);
+const longDay = (t,tz) => fmt(tz,{weekday:"long",day:"numeric",month:"long"}).format(t);
+const myTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const num = (v,d=0) => (v||0).toLocaleString("nl-NL",{minimumFractionDigits:d,maximumFractionDigits:d});
+const compass = deg => ["N","NO","O","ZO","Z","ZW","W","NW"][Math.round(deg/45)%8];
+
+function tyre(kind,size,cls=""){
+  const c = {slick:"var(--slick)",inter:"var(--inter)",wet:"var(--wet)",doubt:"var(--doubt)",none:"var(--muted)"}[kind];
+  let band = `<circle cx="50" cy="50" r="33" fill="none" stroke="${c}" stroke-width="6"${kind==="none"?' stroke-dasharray="7 9"':""}/>`;
+  if(kind==="doubt") band =
+    `<path d="M50 17a33 33 0 0 1 0 66" fill="none" stroke="var(--inter)" stroke-width="6"/><path d="M50 83a33 33 0 0 1 0-66" fill="none" stroke="var(--slick)" stroke-width="6"/>`;
+  return `<svg class="${cls}" width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48" fill="var(--tyre)"/>${band}<circle cx="50" cy="50" r="20" fill="#59636C"/><circle cx="50" cy="50" r="7" fill="var(--tyre)"/></svg>`;
+}
+
+/* Rekent een sessie door. Alleen hele uren die de sessie raken tellen mee. */
+function summarize(session,wx){
+  if(!wx || session.end > Date.now()+HORIZON+DAY) return null;
+  const from = Math.floor(session.start/HOUR)*HOUR, idx = [];
+  wx.time.forEach((t,i)=>{ if(t>=from && t<session.end) idx.push(i); });
+  if(!idx.length || wx.temp[idx[0]]==null) return null;
+  const pick = a => idx.map(i=>a[i]).filter(v=>v!=null);
+  const max = a => { const p=pick(a); return p.length?Math.max(...p):0; };
+  const avg = a => { const p=pick(a); return p.length?p.reduce((x,y)=>x+y,0)/p.length:0; };
+  let votes=0,counted=0;
+  (wx.models||[]).forEach(m=>{
+    const around = m.time.map((t,i)=>t>=from-HOUR && t<=session.end+HOUR ? m.rain[i] : null).filter(v=>v!=null);
+    if(!around.length) return;
+    counted++;
+    if(around.reduce((a,b)=>a+b,0)>=.2) votes++;
+  });
+  const chance=max(wx.chance), mm=max(wx.rain);
+  let call="slick";
+  if(mm>=2.5 && chance>=50) call="wet";
+  else if(mm>=.3 && chance>=40) call="inter";
+  else if(chance>=30 || votes>0) call="doubt";
+  return {call,chance,mm,votes,counted,temp:avg(wx.temp),wind:avg(wx.wind),gust:max(wx.gust),dir:wx.dir[idx[0]],hum:avg(wx.hum),dew:avg(wx.dew||[]),press:avg(wx.press||[])};
+}
+
+function reasonFor(sum,session){
+  const out=[`Tot ${num(sum.chance)}% kans op regen en maximaal ${num(sum.mm,1)} mm per uur.`];
+  if(sum.counted) out.push(sum.votes===0?`Alle ${sum.counted} weermodellen houden het droog.`:
+    sum.votes===sum.counted?`Alle ${sum.counted} weermodellen zien regen.`:`${sum.votes} van de ${sum.counted} weermodellen ziet regen, dus de zekerheid is laag.`);
+  const days=Math.round((session.start-Date.now())/DAY);
+  if(days>=5) out.push(`De sessie is nog ${days} dagen weg, dus dit kan flink schuiven.`);
+  return out.join(" ");
+}
+
+function countdown(s){
+  const now=Date.now();
+  if(now>=s.end) return "Deze sessie is afgelopen.";
+  if(now>=s.start) return `Bezig, nog ${Math.ceil((s.end-now)/6e4)} minuten.`;
+  const t=Math.floor((s.start-now)/1e3),d=Math.floor(t/86400),h=Math.floor(t%86400/3600),m=Math.floor(t%3600/60),x=t%60;
+  const p=n=>String(n).padStart(2,"0");
+  return `Begint over ${d?d+(d===1?" dag ":" dagen "):""}${p(h)}:${p(m)}:${p(x)}`;
+}
+
+function render(){
+  const r=state.race,s=state.session,wx=state.wx[r.id];
+  document.title=`${r.name}: ${s.short}`;
+  $("title").textContent=r.name;
+  $("sub").textContent=`${r.circuit}, ronde ${r.round}`;
+  const rec=RECORDS[r.id];
+  $("record").innerHTML=`Snelste raceronde<b>${rec[0]}</b>${rec[1]} (${rec[2]})`;
+  $("races").innerHTML=RACES.map(x=>`<button type="button" data-race="${x.id}" aria-pressed="${x===r}">${x.name}</button>`).join("");
+  $("sessions").innerHTML=r.sessions.map(x=>{
+    const sum=summarize(x,wx);
+    return `<button type="button" data-session="${x.id}" aria-pressed="${x===s}" aria-label="${x.label}, ${CALLS[sum?sum.call:"none"].title}" class="${Date.now()>x.end?"past":""}">${tyre(sum?sum.call:"none",36)}<b>${x.short}</b><small>${dayName(x.start,myTz)} ${clock(x.start,myTz)}</small></button>`;
+  }).join("");
+  const sum=summarize(s,wx),call=CALLS[sum?sum.call:"none"];
+  $("bigTyre").innerHTML=tyre(sum?sum.call:"none",104,"tyre-big");
+  $("when").textContent=`${s.label}, ${dayName(s.start,myTz)} ${clock(s.start,myTz)}`;
+  $("verdict").textContent=call.title;
+  if(sum) $("reason").textContent=`${call.text}. ${reasonFor(sum,s)}`;
+  else if(state.failed && !wx) $("reason").textContent="De verwachting kon niet worden geladen.";
+  else if(!wx) $("reason").textContent="Verwachting laden…";
+  else $("reason").textContent=`De verwachting komt rond ${longDay(s.start-HORIZON,myTz)} beschikbaar.`;
+  const dash=v=>sum?v:"--";
+  $("stats").innerHTML=[
+    ["Lucht",dash(`${num(sum&&sum.temp)}<span>°C</span>`)],
+    ["Regenkans",dash(`${num(sum&&sum.chance)}<span>%</span>`)],
+    ["Vocht",dash(`${num(sum&&sum.hum)}<span>%</span>`)],
+    [sum?`km/u uit ${compass(sum.dir)}`:"Wind",dash(num(sum&&sum.wind))]
+  ].map(([k,v])=>`<div><dd>${v}</dd><dt>${k}</dt></div>`).join("");
+  const colors={slick:"var(--slick)",doubt:"var(--doubt)",inter:"var(--inter)",wet:"var(--wet)",none:"var(--muted)"};
+  $("status").textContent=call.text.toUpperCase();
+  $("status").style.color=colors[sum?sum.call:"none"];
+  $("problem").innerHTML=state.failed?`<div class="problem">De weerdienst is hier niet bereikbaar. Open dit bestand in Safari of Chrome en controleer je verbinding.<button type="button" id="retry">Opnieuw proberen</button></div>`:"";
+  tick();
+  drawChart();
+  drawTrack();
+  rainClock(s,wx);
+  drawActual();
+  loadActual(r,s);
+  loadPredict(r);
+  $("times").innerHTML=r.sessions.map(x=>`<tr><th scope="row">${x.short}</th><td>${dayName(x.start,myTz)} ${clock(x.start,myTz)}</td><td>${dayName(x.start,r.tz)} ${clock(x.start,r.tz)}</td></tr>`).join("");
+}
+const tick=()=>{
+  $("count").textContent=countdown(state.session);
+  const now=Date.now();
+  const on=state.race.sessions.some(x=>now>=x.start-15*6e4&&now<=x.end+15*6e4);
+  document.querySelector(".liveblock").classList.toggle("on",on);
+  $("liveNote").textContent=on?"Er is nu een sessie, de links zijn live.":"Deze sites zijn vooral bruikbaar tijdens een sessie.";
+};
+
+function drawChart(){
+  const box=$("chart"),r=state.race,wx=state.wx[r.id];
+  const W=Math.max(300,box.clientWidth||340),H=190,top=24,bottom=24,base=H-bottom;
+  const midnight=t=>{ const d=new Date(t); d.setHours(0,0,0,0); return d.getTime(); };
+  const nextDay=t=>{ const d=new Date(t); d.setDate(d.getDate()+1); d.setHours(0,0,0,0); return d.getTime(); };
+  const x0=midnight(r.sessions[0].start),x1=nextDay(r.sessions[4].end);
+  const X=t=>(t-x0)/(x1-x0)*W, inner=base-top;
+  let g="";
+  r.sessions.forEach((s,i)=>{
+    const a=X(s.start),w=Math.max(X(s.end)-a,7),on=s===state.session;
+    g+=`<rect class="band${on?" on":""}" data-session="${s.id}" x="${a}" y="${top}" width="${w}" height="${inner}"/>`;
+    g+=`<text class="bandlabel" x="${a+w/2}" y="${top-7}" text-anchor="middle">${s.short==="Kwali"?"K":s.short==="Race"?"R":s.short.slice(2)}</text>`;
+  });
+  if(wx){
+    const bw=Math.max(1.5,X(x0+HOUR)-1), cap=5; let line="";
+    wx.time.forEach((t,i)=>{
+      if(t<x0||t>=x1) return;
+      const mm=Math.min(wx.rain[i]||0,cap),h=mm/cap*inner;
+      if(mm>0) g+=`<rect x="${X(t)}" y="${base-h}" width="${bw}" height="${h}" fill="var(--rain)"/>`;
+      if(wx.chance[i]!=null) line+=`${line?"L":"M"}${(X(t)+bw/2).toFixed(1)} ${(base-wx.chance[i]/100*inner).toFixed(1)}`;
+    });
+    if(line) g+=`<path d="${line}" fill="none" stroke="var(--doubt)" stroke-width="2"/>`;
+  }
+  for(let t=x0;t<x1;t=nextDay(t)){
+    const noon=new Date(t); noon.setHours(12,0,0,0);
+    g+=`<line x1="${X(t)}" x2="${X(t)}" y1="${top}" y2="${base}" stroke="var(--line)"/>`;
+    g+=`<line x1="${X(noon.getTime())}" x2="${X(noon.getTime())}" y1="${base}" y2="${base+5}" stroke="var(--line)"/>`;
+    g+=`<text x="${X(t)+4}" y="${H-7}">${fmt(myTz,{weekday:"short",day:"numeric"}).format(t)}</text>`;
+    g+=`<text x="${X(noon.getTime())}" y="${H-7}" text-anchor="middle">12:00</text>`;
+  }
+  g+=`<line x1="0" x2="${W}" y1="${base}" y2="${base}" stroke="var(--line)"/>`;
+  const now=Date.now();
+  if(now>x0&&now<x1) g+=`<line x1="${X(now)}" x2="${X(now)}" y1="${top}" y2="${base}" stroke="var(--text)" stroke-dasharray="3 3"/>`;
+  box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Verwachte regen per uur over het raceweekend, met de sessies gemarkeerd">${g}</svg>`;
+}
+
+function rainClock(s,wx){
+  const box=$("clock");
+  if(!wx){ box.innerHTML=""; return; }
+  const from=Math.floor(s.start/HOUR)*HOUR-3*HOUR,to=Math.ceil(s.end/HOUR)*HOUR+HOUR,slots=[];
+  wx.time.forEach((t,i)=>{ if(t>=from&&t<to&&wx.chance[i]!=null) slots.push({t,chance:wx.chance[i],mm:wx.rain[i]||0}); });
+  if(slots.length<3){ box.innerHTML=""; return; }
+  const wet=x=>x.chance>=50||(x.mm>=.1&&x.chance>=40),first=slots.find(wet);
+  const fromT=clock(slots[0].t,myTz),toT=clock(slots[slots.length-1].t+HOUR,myTz);
+  let line=`Geen regen verwacht tussen ${fromT} en ${toT}.`;
+  if(first){
+    const when=first.t+HOUR<=s.start?`, ${Math.max(1,Math.floor((s.start-first.t)/HOUR))} uur voor de start`:first.t>=s.end?", na de sessie":", tijdens de sessie";
+    line=`Regen mogelijk tussen ${clock(first.t,myTz)} en ${clock(first.t+HOUR,myTz)}${when}.`;
+  }
+  const cells=slots.map(x=>{
+    const c=Math.round(x.chance),on=c>=55;
+    return `<div class="${x.t+HOUR>s.start&&x.t<s.end?"in":""}"><i style="background:color-mix(in srgb,var(--rain) ${Math.max(c,6)}%,var(--raised));color:${on?"var(--on-rain)":"var(--text)"}">${c}%</i>${clock(x.t,myTz).slice(0,2)}:00</div>`;
+  }).join("");
+  box.innerHTML=`<p class="clockline">${line}</p><div class="strip" role="img" aria-label="Regenkans per uur rond de sessie">${cells}</div><p class="note">Regenkans per uur. De witte streep is de sessie.</p>`;
+}
+
+const KEY=(r,s)=>`${r.id}/${s.id}`;
+function loadCalls(){ return saved("calls")||{}; }
+/* Bewaart de laatste keuze vóór de start en meldt echte wijzigingen. */
+function checkChanges(r){
+  const wx=state.wx[r.id],calls=loadCalls(),now=Date.now(),msgs=[];
+  r.sessions.forEach(s=>{
+    if(now>=s.start) return;
+    const sum=summarize(s,wx); if(!sum) return;
+    const k=KEY(r,s),old=calls[k];
+    if(old&&old.call!==sum.call) msgs.push(`${r.name} ${s.short}: van ${CALLS[old.call].title.toLowerCase()} naar ${CALLS[sum.call].title.toLowerCase()}, regenkans nu ${num(sum.chance)}%.`);
+    calls[k]={call:sum.call};
+  });
+  save("calls",calls);
+  if(!msgs.length) return;
+  $("changes").innerHTML=msgs.map(m=>`<p class="change">${m}</p>`).join("");
+  sendNotice(msgs.join(" "));
+}
+function sendNotice(text){
+  if(!("Notification" in window)||Notification.permission!=="granted") return;
+  const opt={body:text,icon:"icon-192.png"};
+  if(navigator.serviceWorker&&navigator.serviceWorker.controller) navigator.serviceWorker.ready.then(reg=>reg.showNotification("Bandenkeuze",opt)).catch(()=>{});
+  else try{ new Notification("Bandenkeuze",opt); }catch{}
+}
+function setupNotify(){
+  const b=$("notify");
+  if(!("Notification" in window)||location.protocol!=="https:") return;
+  b.hidden=false;
+  if(Notification.permission==="granted") b.textContent="Meldingen staan aan";
+  if(Notification.permission==="denied") b.hidden=true;
+}
+
+/* Na afloop: gemeten weer van OpenF1. Gratis zodra de sessie een half uur voorbij is. */
+const tried=new Set();
+async function loadActual(r,s){
+  const k=KEY(r,s),all=saved("actual")||{};
+  if(all[k]||tried.has(k)||Date.now()<s.end+35*6e4) return;
+  tried.add(k);
+  try{
+    const list=await getJson("https://api.openf1.org/v1/sessions?year=2026");
+    const hit=list.find(x=>Math.abs(Date.parse(x.date_start)-s.start)<HOUR);
+    if(!hit) return;
+    const w=await getJson(`https://api.openf1.org/v1/weather?session_key=${hit.session_key}`);
+    if(!w.length) return;
+    const track=w.map(x=>x.track_temperature).filter(v=>v!=null);
+    all[k]={rain:w.some(x=>x.rainfall>0),track:track.length?track.reduce((a,b)=>a+b,0)/track.length:null};
+    save("actual",all);
+    if(state.session===s) drawActual();
+  }catch(e){}
+}
+function drawActual(){
+  const el=$("actual"),all=saved("actual")||{},calls=loadCalls(),k=KEY(state.race,state.session),a=all[k];
+  el.hidden=!a;
+  if(!a) return;
+  const judge=(act,pred)=>!pred||pred.call==="doubt"?null:((pred.call==="inter"||pred.call==="wet")===act.rain);
+  let good=0,total=0;
+  Object.keys(all).forEach(x=>{ const v=judge(all[x],calls[x]); if(v!==null){ total++; if(v) good++; } });
+  const v=judge(a,calls[k]);
+  el.textContent=`Gemeten: ${a.rain?"regen":"droog"}${a.track!=null?`, baan ${num(a.track)}°C`:""}.${v===null?"":v?" De verwachting klopte.":" De verwachting zat ernaast."}${total?` Score: ${good} van ${total}.`:""}`;
+}
+
+const CIRCUITS={
+  "sao-paulo":{len:"4,309 km",laps:71,dist:"305,879 km",turns:15},
+  "las-vegas":{len:"6,201 km",laps:50,dist:"310,05 km",turns:17},
+  "qatar":{len:"5,419 km",laps:57,dist:"308,826 km",turns:16},
+  "abu-dhabi":{len:"5,281 km",laps:58,dist:"306,183 km",turns:16}
+};
+const factGrid=list=>list.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
+function airDensity(t,dew,p){
+  const pv=6.1078*Math.pow(10,7.5*dew/(dew+237.3)),T=t+273.15;
+  return ((p-pv)*100)/(287.05*T)+(pv*100)/(461.495*T);
+}
+function findStraights(c,lat){
+  const k=Math.cos(lat*Math.PI/180)*111320,m=c.map(([lon,la])=>[lon*k,la*111320]),runs=[];
+  let i=0;
+  while(i<m.length-1){
+    const a=Math.atan2(m[i+1][1]-m[i][1],m[i+1][0]-m[i][0]);
+    let j=i+1,len=0;
+    while(j<m.length){
+      const dx=m[j][0]-m[j-1][0],dy=m[j][1]-m[j-1][1];
+      let d=Math.abs(Math.atan2(dy,dx)-a); if(d>Math.PI) d=2*Math.PI-d;
+      if(d>.26) break;
+      len+=Math.hypot(dx,dy); j++;
+    }
+    runs.push({len,from:m[i],to:m[j-1]});
+    i=Math.max(j-1,i+1);
+  }
+  return runs.filter(x=>x.len>=250).sort((a,b)=>b.len-a.len).slice(0,2);
+}
+function drawTech(r,sum,c){
+  const c2=CIRCUITS[r.id],wx=state.wx[r.id];
+  $("techTrack").innerHTML=factGrid([["Lengte",c2.len],["Ronden",c2.laps],["Racedistantie",c2.dist],["Bochten",c2.turns]]);
+  if(!sum){ $("techAir").innerHTML=""; $("techWind").innerHTML=""; return; }
+  const rho=sum.press?airDensity(sum.temp,sum.dew,sum.press):null;
+  $("techAir").innerHTML=factGrid([
+    ["Luchtdichtheid",rho?`${num(rho,3)} kg/m³`:"--"],
+    ["Ten opzichte van standaard",rho?`${num((rho/1.225-1)*100,1)}%`:"--"],
+    ["Dauwpunt",sum.press?`${num(sum.dew)}°C`:"--"],
+    ["Luchtdruk",sum.press?`${num(sum.press)} hPa`:"--"]
+  ]);
+  if(!c){ $("techWind").innerHTML=""; return; }
+  const rad=(sum.dir+180)*Math.PI/180,wE=Math.sin(rad)*sum.wind,wN=Math.cos(rad)*sum.wind;
+  $("techWind").innerHTML=findStraights(c,r.lat).map((s,i)=>{
+    const dx=s.to[0]-s.from[0],dy=s.to[1]-s.from[1],n=Math.hypot(dx,dy)||1,along=(dx*wE+dy*wN)/n,side=Math.abs((dx*wN-dy*wE)/n);
+    const kind=along>=0?"meewind":"tegenwind";
+    return `<p class="windline"><b>${i?"Tweede":"Langste"} rechte stuk, ongeveer ${num(s.len/1000,1)} km:</b> ${num(Math.abs(along))} km/u ${kind}, ${num(side)} km/u zijwind.</p>`;
+  }).join("");
+}
+
+/* Top 3-indicatie op basis van de snelste rondes uit afgeronde sessies (OpenF1). */
+const lapTime=t=>`${Math.floor(t/60)}:${(t%60).toFixed(3).padStart(6,"0")}`;
+const top3=m=>Object.entries(m).sort((a,b)=>a[1]-b[1]).slice(0,3);
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const predTried=new Set();
+async function loadPredict(r){
+  const done=r.sessions.slice(0,4).filter(s=>Date.now()>s.end+35*6e4);
+  drawPredict(r);
+  const key=r.id+done.length;
+  if(!done.length||predTried.has(key)) return;
+  predTried.add(key);
+  try{
+    const store=saved("laps")||{};
+    const missing=done.filter(s=>!store[KEY(r,s)]);
+    if(!missing.length) return;
+    const list=await getJson("https://api.openf1.org/v1/sessions?year=2026");
+    for(const s of missing){
+      const hit=list.find(x=>Math.abs(Date.parse(x.date_start)-s.start)<HOUR);
+      if(!hit) continue;
+      await wait(500);
+      const laps=await getJson(`https://api.openf1.org/v1/laps?session_key=${hit.session_key}`);
+      await wait(500);
+      const drivers=await getJson(`https://api.openf1.org/v1/drivers?session_key=${hit.session_key}`);
+      const names={},best={};
+      drivers.forEach(d=>{ names[d.driver_number]=d.name_acronym; });
+      laps.forEach(l=>{
+        if(!l.lap_duration||l.is_pit_out_lap) return;
+        const n=names[l.driver_number]||String(l.driver_number);
+        if(!best[n]||l.lap_duration<best[n]) best[n]=l.lap_duration;
+      });
+      if(Object.keys(best).length){ store[KEY(r,s)]=best; save("laps",store); }
+    }
+  }catch(e){}
+  if(r===state.race) drawPredict(r);
+}
+function drawPredict(r){
+  const store=saved("laps")||{},fp={};
+  const used=r.sessions.slice(0,3).filter(s=>store[KEY(r,s)]);
+  used.forEach(s=>{ Object.entries(store[KEY(r,s)]).forEach(([n,t])=>{ if(!fp[n]||t<fp[n]) fp[n]=t; }); });
+  const q=store[KEY(r,r.sessions[3])];
+  if(!used.length&&!q){
+    $("predict").innerHTML=`<p class="note">Verschijnt ongeveer een half uur na VT1. Dit is geen voorspelling door experts, maar een rangschikking op snelste rondes.</p>`;
+    return;
+  }
+  const list=rows=>`<ol>${rows.map(([n,t],i)=>`<li><b>${i+1}. ${n}</b><span>${lapTime(t)}</span></li>`).join("")}</ol>`;
+  const sum=summarize(r.sessions[4],state.wx[r.id]),raceWet=sum&&sum.call!=="slick";
+  $("predict").innerHTML=`<div class="preds"><div><h3>Kwalificatie</h3>${used.length?list(top3(fp)):'<p class="note">Geen trainingsdata.</p>'}</div><div><h3>Race</h3>${list(top3(q||fp))}</div></div><p class="note">${q?"Race op basis van de kwalificatie.":`Op basis van ${used.map(x=>x.short).join(", ")}.`} Snelle rondes zeggen niet alles: brandstof en motorstand verschillen per team.${raceWet?" Regen kan de racevolgorde flink veranderen.":""}</p>`;
+}
+
+/* Baanlayout: lengte- en breedtegraden omrekenen naar een lijn die in het vak past. */
+function drawTrack(){
+  const r=state.race,raw=state.tracks&&state.tracks[TRACKS[r.id]];
+  if(!raw||raw.length<3){ $("track").innerHTML=""; $("windNote").hidden=true; drawTech(r,summarize(state.session,state.wx[r.id]),null); return; }
+  const area=raw.reduce((a,p,i)=>{ const q=raw[(i+1)%raw.length]; return a+p[0]*q[1]-q[0]*p[1]; },0);
+  const c=(area>0)===CCW[r.id]?raw:[...raw].reverse();
+  const sum=summarize(state.session,state.wx[r.id]);
+  drawTech(r,sum,c);
+  const k=Math.cos(r.lat*Math.PI/180),pts=c.map(([lon,lat])=>[lon*k,-lat]);
+  const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);
+  const x0=Math.min(...xs),y0=Math.min(...ys),w=Math.max(...xs)-x0,h=Math.max(...ys)-y0;
+  const VW=170,VH=170,pad=6,f=Math.min((VW-2*pad)/w,(VH-2*pad)/h);
+  const ox=(VW-w*f)/2,oy=(VH-h*f)/2;
+  const sx=p=>(ox+(p[0]-x0)*f).toFixed(1),sy=p=>(oy+(p[1]-y0)*f).toFixed(1);
+  const windy=sum&&sum.wind>=8,rad=sum?(sum.dir+180)*Math.PI/180:0,wx=Math.sin(rad),wy=Math.cos(rad);
+  let g="";
+  for(let i=0;i<pts.length-1;i++){
+    let color="currentColor";
+    if(sum){
+      color="var(--muted)";
+      if(windy){
+        const a=pts[Math.max(i-2,0)],b=pts[Math.min(i+3,pts.length-1)],dx=b[0]-a[0],dy=a[1]-b[1],len=Math.hypot(dx,dy)||1;
+        const along=(dx*wx+dy*wy)/len;
+        if(along>.5) color="var(--inter)"; else if(along<-.5) color="var(--slick)";
+      }
+    }
+    g+=`<path d="M${sx(pts[i])} ${sy(pts[i])}L${sx(pts[i+1])} ${sy(pts[i+1])}" stroke="${color}"/>`;
+  }
+  $("track").innerHTML=`<svg viewBox="0 0 ${VW} ${VH}" role="img" aria-label="Baanlayout van ${r.circuit}"><g fill="none" stroke-width="3" stroke-linecap="round">${g}</g></svg>`;
+  $("windNote").hidden=!sum;
+  const windHead=sum?`<span class="windhead"><svg class="arrow" viewBox="0 0 24 24" style="transform:rotate(${sum.dir+180}deg)" aria-hidden="true"><path fill="currentColor" d="M12 1 20 22 12 17 4 22z"/></svg> Wind uit ${compass(sum.dir)}, ${num(sum.wind)} km/u</span>`:"";
+  $("windNote").innerHTML=windHead+(windy?" Groen is meewind, rood tegenwind en grijs zijwind. Dit is één windwaarde voor de hele baan.":" Daarom is de baan grijs: er is weinig wind.");
+}
+async function loadTracks(){
+  state.tracks=saved("tracks");
+  if(state.tracks){ drawTrack(); return; }
+  try{
+    const j=await getJson("https://raw.githubusercontent.com/bacinger/f1-circuits/master/f1-circuits.geojson");
+    const want=Object.values(TRACKS),out={};
+    j.features.forEach(f=>{
+      if(!want.includes(f.properties.id)) return;
+      const g=f.geometry;
+      out[f.properties.id]=g.type==="MultiLineString"?g.coordinates.flat():g.coordinates;
+    });
+    state.tracks=out; save("tracks",out); drawTrack(); placeTrack();
+  }catch(e){ /* zonder layout werkt de rest gewoon door */ }
+}
+
+function parseMain(j){
+  const h=j.hourly;
+  return {time:h.time.map(t=>t*1e3),temp:h.temperature_2m,chance:h.precipitation_probability,rain:h.precipitation,wind:h.wind_speed_10m,gust:h.wind_gusts_10m,dir:h.wind_direction_10m,hum:h.relative_humidity_2m,dew:h.dew_point_2m||[],press:h.surface_pressure||[],elev:j.elevation};
+}
+function parseModels(j){
+  const h=j.hourly,time=h.time.map(t=>t*1e3);
+  return MODELS.map(m=>({time,rain:h[`precipitation_${m}`]})).filter(m=>Array.isArray(m.rain));
+}
+async function getJson(url){
+  const c=new AbortController(),t=setTimeout(()=>c.abort(),15e3);
+  try{ const res=await fetch(url,{signal:c.signal}); if(!res.ok) throw new Error(res.status); return await res.json(); }
+  finally{ clearTimeout(t); }
+}
+function saved(id){ try{ return JSON.parse(localStorage.getItem("wx:"+id)); }catch{ return null; } }
+function save(id,v){ try{ localStorage.setItem("wx:"+id,JSON.stringify(v)); }catch{} }
+
+async function loadWeather(r){
+  const base=`https://api.open-meteo.com/v1/forecast?latitude=${r.lat}&longitude=${r.lon}&timezone=UTC&timeformat=unixtime&past_days=1&forecast_days=16`;
+  try{
+    const main=await getJson(`${base}&wind_speed_unit=kmh&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,relative_humidity_2m,dew_point_2m,surface_pressure`);
+    const wx=parseMain(main);
+    try{ wx.models=parseModels(await getJson(`${base}&hourly=precipitation&models=${MODELS.join(",")}`)); }catch{ wx.models=[]; }
+    wx.fetched=Date.now();
+    state.wx[r.id]=wx; state.failed=false; save(r.id,wx);
+    checkChanges(r);
+  }catch(e){
+    const old=saved(r.id);
+    if(old && !state.wx[r.id]) state.wx[r.id]=old;
+    state.failed=true;
+  }
+  if(r===state.race){
+    render();
+    const wx=state.wx[r.id];
+    $("updated").textContent=wx?`Verwachting bijgewerkt om ${clock(wx.fetched,myTz)}.`:"";
+  }
+}
+
+/* Radar */
+let map,marker,rings=[],base,trackLine=null,zoomed=false;
+function initMap(){
+  if(typeof L==="undefined"){ $("map").hidden=true; $("radarNote").textContent="De kaart kon niet laden. Controleer je verbinding en herlaad de pagina."; return; }
+  map=L.map("map",{zoomControl:true,attributionControl:true,minZoom:4,maxZoom:15});
+  base=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:15,className:"dark-tiles",referrerPolicy:"strict-origin-when-cross-origin",attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bijdragers'}).addTo(map);
+  map.attributionControl.addAttribution('<a href="https://www.rainviewer.com/">RainViewer</a>');
+  placeMap();
+  loadRadar();
+}
+function placeTrack(){
+  const btn=$("zoom"),c=state.tracks&&state.tracks[TRACKS[state.race.id]];
+  btn.hidden=!(map&&c);
+  if(trackLine){ trackLine.remove(); trackLine=null; }
+  if(map&&c) trackLine=L.polyline(c.map(([lon,lat])=>[lat,lon]),{color:"#E5342B",weight:3,interactive:false}).addTo(map);
+}
+function setZoom(on){
+  zoomed=on;
+  $("zoom").textContent=on?"Terug naar overzicht":"Zoom in op circuit";
+  if(!map) return;
+  if(on&&trackLine) map.fitBounds(trackLine.getBounds(),{padding:[24,24],maxZoom:14});
+  else map.setView([state.race.lat,state.race.lon],7);
+}
+function placeMap(){
+  if(!map) return;
+  const r=state.race,p=[r.lat,r.lon];
+  setZoom(false);
+  rings.forEach(x=>x.remove()); rings=[];
+  [25,50,100].forEach(km=>rings.push(L.circle(p,{radius:km*1e3,color:"#E5342B",weight:1,fill:false,interactive:false}).addTo(map)));
+  rings.push(L.circleMarker(p,{radius:6,color:"#fff",weight:2,fillColor:"#E5342B",fillOpacity:1}).bindTooltip(r.circuit).addTo(map));
+  placeTrack();
+}
+async function loadRadar(){
+  if(!map) return;
+  try{
+    const j=await getJson("https://api.rainviewer.com/public/weather-maps.json");
+    const past=(j.radar&&j.radar.past)||[];
+    if(!past.length) throw new Error("leeg");
+    state.frames.forEach(f=>f.layer.remove());
+    state.frames=past.map(f=>({time:f.time*1e3,layer:L.tileLayer(`${j.host}${f.path}/256/{z}/{x}/{y}/2/1_1.png`,{maxNativeZoom:7,maxZoom:15,opacity:0,zIndex:5}).addTo(map)}));
+    $("frame").max=state.frames.length-1;
+    showFrame(state.frames.length-1);
+    $("radarNote").textContent="Radarvlakken zijn ongeveer een kilometer groot, dus je ziet aan welke kant van de baan de regen zit, niet in welke bocht precies. Radar dekt ook niet elk land even goed: geen kleur kan geen dekking betekenen.";
+  }catch(e){
+    $("radarNote").textContent="De radarbeelden konden niet laden. De app probeert het over vijf minuten opnieuw.";
+  }
+}
+function showFrame(i){
+  if(!state.frames.length) return;
+  state.frame=i;
+  state.frames.forEach((f,n)=>f.layer.setOpacity(n===i?.75:0));
+  $("frame").value=i;
+  $("stamp").textContent=clock(state.frames[i].time,myTz);
+}
+function setPlaying(on){
+  clearInterval(state.playing); state.playing=null;
+  $("play").textContent=on?"Pauzeer":"Speel af";
+  if(on) state.playing=setInterval(()=>showFrame((state.frame+1)%state.frames.length),700);
+}
+
+function chooseRace(r,s){
+  state.race=r;
+  state.session=s||r.sessions.find(x=>x.end>Date.now())||r.sessions[4];
+  $("changes").innerHTML=""; render(); placeMap(); $("updated").textContent="";
+  if(!state.wx[r.id]) { const o=saved(r.id); if(o){ state.wx[r.id]=o; render(); } }
+  loadWeather(r);
+}
+let tyreTaps=0,tapTimer,toastTimer;
+function tyreJoke(){
+  clearTimeout(tapTimer); tapTimer=setTimeout(()=>{ tyreTaps=0; },3000);
+  if(++tyreTaps<3) return;
+  tyreTaps=0;
+  const t=$("toast");
+  t.textContent="Box box! Deze app is van lola-cola432. Gaat de voorspelling mis? Dan waren het de wolken.";
+  t.hidden=false;
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>{ t.hidden=true; },5000);
+}
+document.addEventListener("click",e=>{
+  const race=e.target.closest("[data-race]"),ses=e.target.closest("[data-session]");
+  if(race) chooseRace(RACES.find(x=>x.id===race.dataset.race));
+  else if(ses){ state.session=state.race.sessions.find(x=>x.id===ses.dataset.session); render(); }
+  else if(e.target.id==="retry"){ state.failed=false; render(); loadWeather(state.race); }
+  else if(e.target.id==="zoom") setZoom(!zoomed);
+  else if(e.target.id==="notify") Notification.requestPermission().then(setupNotify);
+  else if(e.target.id==="play"){ if(state.frames.length) setPlaying(!state.playing); }
+});
+$("bigTyre").addEventListener("pointerup",tyreJoke);
+$("frame").addEventListener("input",e=>{ setPlaying(false); showFrame(+e.target.value); });
+addEventListener("resize",()=>{ drawChart(); if(map) map.invalidateSize(); });
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){ setPlaying(false); return; }
+  const wx=state.wx[state.race.id];
+  if(!wx || Date.now()-wx.fetched>6e5) loadWeather(state.race);
+  loadRadar();
+});
+setInterval(tick,1000);
+setInterval(()=>{ if(!document.hidden){ loadWeather(state.race); loadRadar(); } },6e5);
+setInterval(()=>{ if(!document.hidden && !state.frames.length) loadRadar(); },3e5);
+
+chooseRace(RACES.find(r=>r.sessions[4].end>Date.now())||RACES[3]);
+loadTracks();
+$("radarNote").textContent="Kaart laden…";
+const leaflet=document.createElement("script");
+leaflet.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+leaflet.onload=initMap; leaflet.onerror=initMap;
+document.body.appendChild(leaflet);
+setupNotify();
+if(location.protocol==="https:"&&navigator.serviceWorker) navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
