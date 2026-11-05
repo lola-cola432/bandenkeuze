@@ -37,8 +37,8 @@ h1,h2,p{margin:0}
 .app{max-width:1120px;margin:0 auto;padding:1rem 1rem 2.5rem;display:grid;gap:1.75rem}
 @media (min-width:900px){
   .app{grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:2.5rem;padding-top:1.75rem}
-  .top,.call,.trackbox,.liveblock,.graph{grid-column:1}
-  .radar{grid-column:2;grid-row:1 / span 5;position:sticky;top:1rem;align-self:start}
+  .top,.call,.trackbox,.techblock,.predblock,.liveblock,.graph{grid-column:1}
+  .radar{grid-column:2;grid-row:1 / span 7;position:sticky;top:1rem;align-self:start}
   .times,footer{grid-column:1 / -1}
   .radar #map{height:min(70vh,620px)}
 }
@@ -78,7 +78,18 @@ h1{font:700 clamp(2.6rem,12vw,4rem)/1 var(--display);margin-top:.15rem}
 .status{margin-top:1rem;font-weight:600;font-size:.9rem}
 .verdictbox{background:var(--raised);padding:1rem}
 .trackbox{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1rem;align-items:center}
-.links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.4rem;margin-top:.5rem}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);margin:.5rem 0 0;border:1px solid var(--line)}
+.facts div{background:var(--bg);padding:.55rem .65rem;min-width:0}
+.facts dt{color:var(--muted);font-size:.78rem}
+.facts dd{margin:0;font:600 1.3rem/1.15 var(--display)}
+.techblock h3{margin:1rem 0 0;font:600 1.1rem/1.2 var(--display)}
+.windline{margin-top:.5rem;font-size:.9rem}
+.preds{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin-top:.5rem}
+.preds h3{margin:0 0 .25rem;font:600 1.1rem var(--display)}
+.preds ol{margin:0;padding:0;list-style:none}
+.preds li{display:flex;justify-content:space-between;gap:.4rem;padding:.35rem 0;border-top:1px solid var(--line);font-size:.9rem}
+.preds b{font:600 1.1rem var(--display)}
+.links{display:grid;gap:.4rem;margin-top:.5rem}
 .links a{min-height:44px;display:flex;align-items:center;justify-content:center;background:var(--raised);border:1px solid var(--line);color:var(--text);font-weight:600;font-size:.9rem;text-decoration:none}
 .liveblock.on .links a{border-color:var(--inter)}
 h2.label{font:600 1.45rem/1.2 var(--display)}
@@ -160,13 +171,24 @@ footer a{color:inherit}
     </div>
   </section>
 
+  <section class="techblock">
+    <h2 class="label">Techniek</h2>
+    <dl class="facts" id="techAir"></dl>
+    <div id="techWind"></div>
+    <h3>Circuit</h3>
+    <dl class="facts" id="techTrack"></dl>
+  </section>
+
+  <section class="predblock">
+    <h2 class="label">Top 3-indicatie</h2>
+    <div id="predict"></div>
+  </section>
+
   <section class="liveblock">
     <h2 class="label">Live tijdens de sessie</h2>
     <p class="note" id="liveNote"></p>
     <div class="links">
       <a href="https://f1cosmos.com/dashboard/live" target="_blank" rel="noopener">F1 Cosmos</a>
-      <a href="https://f1livedata.com/laptimes" target="_blank" rel="noopener">F1 Live Data</a>
-      <a href="https://f1-dash.com/" target="_blank" rel="noopener">f1-dash</a>
     </div>
   </section>
 
@@ -197,7 +219,7 @@ footer a{color:inherit}
   <footer>
     <p id="updated"></p>
     <p>Gemaakt door lola-cola432, hoofd Natte Vingers en Bandenadvies.</p>
-    <p>De bandenkeuze is een eigen vuistregel op basis van de weersverwachting, geen teaminformatie. Weer: <a href="https://open-meteo.com/">Open-Meteo</a> (modellen van ECMWF, NOAA en DWD). Weather data by <a href="https://www.rainviewer.com/">RainViewer</a>. Kaart: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bijdragers. Circuitlijnen: <a href="https://github.com/bacinger/f1-circuits">f1-circuits</a> van Tomislav Bacinger (MIT), niet officieel. Live-links: F1 Cosmos, F1 Live Data en f1-dash, niet officieel en niet van Bandenkeuze. Gemeten sessieweer: <a href="https://openf1.org/">OpenF1</a>, niet officieel. Sessietijden gecontroleerd op 4 november 2026.</p>
+    <p>De bandenkeuze is een eigen vuistregel op basis van de weersverwachting en de top 3 een rangschikking op rondetijden, geen teaminformatie of officiële voorspelling. Weer: <a href="https://open-meteo.com/">Open-Meteo</a> (modellen van ECMWF, NOAA en DWD). Weather data by <a href="https://www.rainviewer.com/">RainViewer</a>. Kaart: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bijdragers. Circuitlijnen: <a href="https://github.com/bacinger/f1-circuits">f1-circuits</a> van Tomislav Bacinger (MIT), niet officieel. Live timing: F1 Cosmos, niet officieel en niet van Bandenkeuze. Gemeten sessieweer: <a href="https://openf1.org/">OpenF1</a>, niet officieel. Sessietijden gecontroleerd op 4 november 2026.</p>
   </footer>
 </main>
 <div class="toast" id="toast" role="status" hidden></div>
@@ -278,7 +300,7 @@ function summarize(session,wx){
   if(mm>=2.5 && chance>=50) call="wet";
   else if(mm>=.3 && chance>=40) call="inter";
   else if(chance>=30 || votes>0) call="doubt";
-  return {call,chance,mm,votes,counted,temp:avg(wx.temp),wind:avg(wx.wind),gust:max(wx.gust),dir:wx.dir[idx[0]],hum:avg(wx.hum)};
+  return {call,chance,mm,votes,counted,temp:avg(wx.temp),wind:avg(wx.wind),gust:max(wx.gust),dir:wx.dir[idx[0]],hum:avg(wx.hum),dew:avg(wx.dew||[]),press:avg(wx.press||[])};
 }
 
 function reasonFor(sum,session){
@@ -336,6 +358,7 @@ function render(){
   rainClock(s,wx);
   drawActual();
   loadActual(r,s);
+  loadPredict(r);
   $("times").innerHTML=r.sessions.map(x=>`<tr><th scope="row">${x.short}</th><td>${dayName(x.start,myTz)} ${clock(x.start,myTz)}</td><td>${dayName(x.start,r.tz)} ${clock(x.start,r.tz)}</td></tr>`).join("");
 }
 const tick=()=>{
@@ -343,7 +366,7 @@ const tick=()=>{
   const now=Date.now();
   const on=state.race.sessions.some(x=>now>=x.start-15*6e4&&now<=x.end+15*6e4);
   document.querySelector(".liveblock").classList.toggle("on",on);
-  $("liveNote").textContent=on?"Er is nu een sessie, de links zijn live.":"Deze sites zijn vooral bruikbaar tijdens een sessie.";
+  $("liveNote").textContent=on?"Er is nu een sessie, live timing staat aan.":"Vooral bruikbaar tijdens een sessie.";
 };
 
 function drawChart(){
@@ -462,13 +485,111 @@ function drawActual(){
   el.textContent=`Gemeten: ${a.rain?"regen":"droog"}${a.track!=null?`, baan ${num(a.track)}°C`:""}.${v===null?"":v?" De verwachting klopte.":" De verwachting zat ernaast."}${total?` Score: ${good} van ${total}.`:""}`;
 }
 
+const CIRCUITS={
+  "sao-paulo":{len:"4,309 km",laps:71,dist:"305,879 km",turns:15},
+  "las-vegas":{len:"6,201 km",laps:50,dist:"310,05 km",turns:17},
+  "qatar":{len:"5,419 km",laps:57,dist:"308,826 km",turns:16},
+  "abu-dhabi":{len:"5,281 km",laps:58,dist:"306,183 km",turns:16}
+};
+const factGrid=list=>list.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
+function airDensity(t,dew,p){
+  const pv=6.1078*Math.pow(10,7.5*dew/(dew+237.3)),T=t+273.15;
+  return ((p-pv)*100)/(287.05*T)+(pv*100)/(461.495*T);
+}
+function findStraights(c,lat){
+  const k=Math.cos(lat*Math.PI/180)*111320,m=c.map(([lon,la])=>[lon*k,la*111320]),runs=[];
+  let i=0;
+  while(i<m.length-1){
+    const a=Math.atan2(m[i+1][1]-m[i][1],m[i+1][0]-m[i][0]);
+    let j=i+1,len=0;
+    while(j<m.length){
+      const dx=m[j][0]-m[j-1][0],dy=m[j][1]-m[j-1][1];
+      let d=Math.abs(Math.atan2(dy,dx)-a); if(d>Math.PI) d=2*Math.PI-d;
+      if(d>.26) break;
+      len+=Math.hypot(dx,dy); j++;
+    }
+    runs.push({len,from:m[i],to:m[j-1]});
+    i=Math.max(j-1,i+1);
+  }
+  return runs.filter(x=>x.len>=250).sort((a,b)=>b.len-a.len).slice(0,2);
+}
+function drawTech(r,sum,c){
+  const c2=CIRCUITS[r.id],wx=state.wx[r.id];
+  $("techTrack").innerHTML=factGrid([["Lengte",c2.len],["Ronden",c2.laps],["Racedistantie",c2.dist],["Bochten",c2.turns]]);
+  if(!sum){ $("techAir").innerHTML=""; $("techWind").innerHTML=""; return; }
+  const rho=sum.press?airDensity(sum.temp,sum.dew,sum.press):null;
+  $("techAir").innerHTML=factGrid([
+    ["Luchtdichtheid",rho?`${num(rho,3)} kg/m³`:"--"],
+    ["Ten opzichte van standaard",rho?`${num((rho/1.225-1)*100,1)}%`:"--"],
+    ["Dauwpunt",sum.press?`${num(sum.dew)}°C`:"--"],
+    ["Luchtdruk",sum.press?`${num(sum.press)} hPa`:"--"]
+  ]);
+  if(!c){ $("techWind").innerHTML=""; return; }
+  const rad=(sum.dir+180)*Math.PI/180,wE=Math.sin(rad)*sum.wind,wN=Math.cos(rad)*sum.wind;
+  $("techWind").innerHTML=findStraights(c,r.lat).map((s,i)=>{
+    const dx=s.to[0]-s.from[0],dy=s.to[1]-s.from[1],n=Math.hypot(dx,dy)||1,along=(dx*wE+dy*wN)/n,side=Math.abs((dx*wN-dy*wE)/n);
+    const kind=along>=0?"meewind":"tegenwind";
+    return `<p class="windline"><b>${i?"Tweede":"Langste"} rechte stuk, ongeveer ${num(s.len/1000,1)} km:</b> ${num(Math.abs(along))} km/u ${kind}, ${num(side)} km/u zijwind.</p>`;
+  }).join("");
+}
+
+/* Top 3-indicatie op basis van de snelste rondes uit afgeronde sessies (OpenF1). */
+const lapTime=t=>`${Math.floor(t/60)}:${(t%60).toFixed(3).padStart(6,"0")}`;
+const top3=m=>Object.entries(m).sort((a,b)=>a[1]-b[1]).slice(0,3);
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const predTried=new Set();
+async function loadPredict(r){
+  const done=r.sessions.slice(0,4).filter(s=>Date.now()>s.end+35*6e4);
+  drawPredict(r);
+  const key=r.id+done.length;
+  if(!done.length||predTried.has(key)) return;
+  predTried.add(key);
+  try{
+    const store=saved("laps")||{};
+    const missing=done.filter(s=>!store[KEY(r,s)]);
+    if(!missing.length) return;
+    const list=await getJson("https://api.openf1.org/v1/sessions?year=2026");
+    for(const s of missing){
+      const hit=list.find(x=>Math.abs(Date.parse(x.date_start)-s.start)<HOUR);
+      if(!hit) continue;
+      await wait(500);
+      const laps=await getJson(`https://api.openf1.org/v1/laps?session_key=${hit.session_key}`);
+      await wait(500);
+      const drivers=await getJson(`https://api.openf1.org/v1/drivers?session_key=${hit.session_key}`);
+      const names={},best={};
+      drivers.forEach(d=>{ names[d.driver_number]=d.name_acronym; });
+      laps.forEach(l=>{
+        if(!l.lap_duration||l.is_pit_out_lap) return;
+        const n=names[l.driver_number]||String(l.driver_number);
+        if(!best[n]||l.lap_duration<best[n]) best[n]=l.lap_duration;
+      });
+      if(Object.keys(best).length){ store[KEY(r,s)]=best; save("laps",store); }
+    }
+  }catch(e){}
+  if(r===state.race) drawPredict(r);
+}
+function drawPredict(r){
+  const store=saved("laps")||{},fp={};
+  const used=r.sessions.slice(0,3).filter(s=>store[KEY(r,s)]);
+  used.forEach(s=>{ Object.entries(store[KEY(r,s)]).forEach(([n,t])=>{ if(!fp[n]||t<fp[n]) fp[n]=t; }); });
+  const q=store[KEY(r,r.sessions[3])];
+  if(!used.length&&!q){
+    $("predict").innerHTML=`<p class="note">Verschijnt ongeveer een half uur na VT1. Dit is geen voorspelling door experts, maar een rangschikking op snelste rondes.</p>`;
+    return;
+  }
+  const list=rows=>`<ol>${rows.map(([n,t],i)=>`<li><b>${i+1}. ${n}</b><span>${lapTime(t)}</span></li>`).join("")}</ol>`;
+  const sum=summarize(r.sessions[4],state.wx[r.id]),raceWet=sum&&sum.call!=="slick";
+  $("predict").innerHTML=`<div class="preds"><div><h3>Kwalificatie</h3>${used.length?list(top3(fp)):'<p class="note">Geen trainingsdata.</p>'}</div><div><h3>Race</h3>${list(top3(q||fp))}</div></div><p class="note">${q?"Race op basis van de kwalificatie.":`Op basis van ${used.map(x=>x.short).join(", ")}.`} Snelle rondes zeggen niet alles: brandstof en motorstand verschillen per team.${raceWet?" Regen kan de racevolgorde flink veranderen.":""}</p>`;
+}
+
 /* Baanlayout: lengte- en breedtegraden omrekenen naar een lijn die in het vak past. */
 function drawTrack(){
   const r=state.race,raw=state.tracks&&state.tracks[TRACKS[r.id]];
-  if(!raw||raw.length<3){ $("track").innerHTML=""; $("windNote").hidden=true; return; }
+  if(!raw||raw.length<3){ $("track").innerHTML=""; $("windNote").hidden=true; drawTech(r,summarize(state.session,state.wx[r.id]),null); return; }
   const area=raw.reduce((a,p,i)=>{ const q=raw[(i+1)%raw.length]; return a+p[0]*q[1]-q[0]*p[1]; },0);
   const c=(area>0)===CCW[r.id]?raw:[...raw].reverse();
   const sum=summarize(state.session,state.wx[r.id]);
+  drawTech(r,sum,c);
   const k=Math.cos(r.lat*Math.PI/180),pts=c.map(([lon,lat])=>[lon*k,-lat]);
   const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);
   const x0=Math.min(...xs),y0=Math.min(...ys),w=Math.max(...xs)-x0,h=Math.max(...ys)-y0;
@@ -511,7 +632,7 @@ async function loadTracks(){
 
 function parseMain(j){
   const h=j.hourly;
-  return {time:h.time.map(t=>t*1e3),temp:h.temperature_2m,chance:h.precipitation_probability,rain:h.precipitation,wind:h.wind_speed_10m,gust:h.wind_gusts_10m,dir:h.wind_direction_10m,hum:h.relative_humidity_2m};
+  return {time:h.time.map(t=>t*1e3),temp:h.temperature_2m,chance:h.precipitation_probability,rain:h.precipitation,wind:h.wind_speed_10m,gust:h.wind_gusts_10m,dir:h.wind_direction_10m,hum:h.relative_humidity_2m,dew:h.dew_point_2m||[],press:h.surface_pressure||[],elev:j.elevation};
 }
 function parseModels(j){
   const h=j.hourly,time=h.time.map(t=>t*1e3);
@@ -528,7 +649,7 @@ function save(id,v){ try{ localStorage.setItem("wx:"+id,JSON.stringify(v)); }cat
 async function loadWeather(r){
   const base=`https://api.open-meteo.com/v1/forecast?latitude=${r.lat}&longitude=${r.lon}&timezone=UTC&timeformat=unixtime&past_days=1&forecast_days=16`;
   try{
-    const main=await getJson(`${base}&wind_speed_unit=kmh&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,relative_humidity_2m`);
+    const main=await getJson(`${base}&wind_speed_unit=kmh&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,relative_humidity_2m,dew_point_2m,surface_pressure`);
     const wx=parseMain(main);
     try{ wx.models=parseModels(await getJson(`${base}&hourly=precipitation&models=${MODELS.join(",")}`)); }catch{ wx.models=[]; }
     wx.fetched=Date.now();
