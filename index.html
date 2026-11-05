@@ -8,8 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Bandenkeuze">
-<meta name="theme-color" content="#E7EAEC" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#20262C" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#0C1118">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,23 +17,15 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" media="print" onload="this.media='all'">
 <style>
 :root{
-  color-scheme:light;
-  --bg:#E7EAEC; --raised:#F6F7F8; --line:#C6CDD3; --text:#181D22; --muted:#55616C;
-  --slick:#D92B22; --inter:#1F9244; --wet:#1670C4; --doubt:#B98A00; --rain:#1670C4;
-  --tyre:#1B1F23; --session:rgba(24,29,34,.15); --on-rain:#fff;
+  color-scheme:dark;
+  --bg:#0C1118; --raised:#151C26; --line:#2A3442; --text:#EEF2F6; --muted:#AAB6C4;
+  --slick:#FF5A4F; --inter:#3DD68C; --wet:#4CA8FF; --doubt:#FFC93C; --rain:#4CA8FF;
+  --tyre:#05070A; --session:rgba(238,242,246,.14); --on-rain:#07121D;
   --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
   --body:Barlow,system-ui,-apple-system,"Segoe UI",sans-serif;
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px);
   padding-bottom:env(safe-area-inset-bottom,0px);
-}
-@media (prefers-color-scheme:dark){
-  :root{
-    color-scheme:dark;
-    --bg:#20262C; --raised:#2A3138; --line:#434D57; --text:#EFF2F4; --muted:#AAB5BE;
-    --slick:#F0483E; --inter:#3CC469; --wet:#4AA3F0; --doubt:#F2C230; --rain:#4AA3F0;
-    --tyre:#101316; --session:rgba(239,242,244,.17); --on-rain:#0D1B26;
-  }
 }
 *,*::before,*::after{box-sizing:inherit}
 html{-webkit-text-size-adjust:100%}
@@ -46,9 +37,8 @@ h1,h2,p{margin:0}
 .app{max-width:1120px;margin:0 auto;padding:1rem 1rem 2.5rem;display:grid;gap:1.75rem}
 @media (min-width:900px){
   .app{grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:2.5rem;padding-top:1.75rem}
-  .top,.call{grid-column:1}
-  .graph{grid-column:1}
-  .radar{grid-column:2;grid-row:1 / span 3;position:sticky;top:1rem;align-self:start}
+  .top,.call,.trackbox,.liveblock,.graph{grid-column:1}
+  .radar{grid-column:2;grid-row:1 / span 5;position:sticky;top:1rem;align-self:start}
   .times,footer{grid-column:1 / -1}
   .radar #map{height:min(70vh,620px)}
 }
@@ -56,13 +46,13 @@ h1,h2,p{margin:0}
 .races::-webkit-scrollbar{display:none}
 .races button{flex:none;min-height:44px;padding:0 .75rem;color:var(--muted);font-weight:500;border-bottom:3px solid transparent}
 .races button[aria-pressed=true]{color:var(--text);border-bottom-color:var(--text)}
-.record{margin-top:.2rem;color:var(--muted);font-size:.9rem}
-.record b{color:var(--text);font:600 1.15rem var(--display);margin-right:.25rem}
+.record{margin-top:.6rem;color:var(--muted);font-size:.85rem;line-height:1.35}
+.record b{display:block;color:var(--text);font:600 1.4rem/1.1 var(--display)}
 .toast{position:fixed;left:1rem;right:1rem;bottom:calc(1rem + env(safe-area-inset-bottom,0px));z-index:1000;max-width:32rem;margin:0 auto;padding:.85rem 1rem;background:var(--tyre);color:#fff;border-left:4px solid var(--slick);font-weight:600}
 .toast[hidden]{display:none}
 #bigTyre{cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
 #bigTyre svg{display:block;pointer-events:none}
-h1{font:700 clamp(3.25rem,15vw,5.5rem)/.95 var(--display);margin-top:.9rem}
+h1{font:700 clamp(2.6rem,12vw,4rem)/1 var(--display);margin-top:.15rem}
 .sub{color:var(--muted)}
 .sessions{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin-top:1.1rem;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 .sessions button{display:flex;flex-direction:column;align-items:center;gap:.2rem;padding:.65rem .1rem .55rem;min-height:44px;position:relative}
@@ -76,14 +66,21 @@ h1{font:700 clamp(3.25rem,15vw,5.5rem)/.95 var(--display);margin-top:.9rem}
 .when{font-weight:600}
 .reason{margin-top:.8rem;max-width:62ch}
 .count{margin-top:.25rem;color:var(--muted)}
-.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:1rem 0 0;border-top:1px solid var(--line)}
-.stats div{padding:.6rem .5rem .5rem 0}
-.stats dt{color:var(--muted);font-size:.82rem}
-.stats dd{margin:0;font:600 1.75rem/1.1 var(--display)}
-.stats dd span{font-size:1rem;font-weight:500}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:.5rem -1rem 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.stats div{padding:.55rem .5rem .5rem 1rem;border-left:1px solid var(--line);min-width:0}
+.stats div:first-child{border-left:0}
+.stats dt{order:2;color:var(--muted);font-size:.75rem}
+.stats dd{margin:0;font:600 1.5rem/1.1 var(--display)}
+.stats dd span{font-size:.85rem;font-weight:500}
 .arrow{display:inline-block;width:.8em;height:.8em;vertical-align:-.04em}
-.head{display:flex;justify-content:space-between;align-items:center;gap:1rem}
-#track svg{display:block;height:132px;width:auto;max-width:46vw}
+#track svg{display:block;width:100%;height:auto}
+.brand{font:700 1.5rem/1 var(--display);letter-spacing:.02em;margin-bottom:.6rem}
+.status{margin-top:1rem;font-weight:600;font-size:.9rem}
+.verdictbox{background:var(--raised);padding:1rem}
+.trackbox{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1rem;align-items:center}
+.links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.4rem;margin-top:.5rem}
+.links a{min-height:44px;display:flex;align-items:center;justify-content:center;background:var(--raised);border:1px solid var(--line);color:var(--text);font-weight:600;font-size:.9rem;text-decoration:none}
+.liveblock.on .links a{border-color:var(--inter)}
 h2.label{font:600 1.45rem/1.2 var(--display)}
 .note{color:var(--muted);font-size:.875rem}
 .windhead{display:block;color:var(--text);font-weight:600;font-size:1rem}
@@ -101,8 +98,6 @@ h2.label{font:600 1.45rem/1.2 var(--display)}
 .player button{min-width:72px;min-height:44px;padding:0 .75rem;background:var(--raised);border:1px solid var(--line);font-weight:600}
 .zoom{min-height:44px;padding:0 .75rem;margin-top:.5rem;background:var(--raised);border:1px solid var(--line);font-weight:600}
 .zoom[hidden]{display:none}
-.livebtn{display:inline-flex;align-items:center;color:var(--text);text-decoration:none}
-.livebtn[hidden]{display:none}
 .strip{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:2px;margin-top:.45rem}
 .strip div{text-align:center;font-size:.72rem;color:var(--muted)}
 .strip i{display:grid;place-items:center;height:38px;margin-bottom:.15rem;font:600 1.05rem var(--display)}
@@ -131,32 +126,52 @@ footer a{color:inherit}
 <body>
 <main class="app">
   <section class="top">
+    <div class="brand">BANDENKEUZE</div>
     <nav class="races" id="races" aria-label="Kies een Grand Prix"></nav>
+    <dl class="stats" id="stats"></dl>
+    <p class="status" id="status"></p>
     <h1 id="title"></h1>
     <p class="sub" id="sub"></p>
-    <p class="record" id="record"></p>
     <div class="sessions" id="sessions" role="group" aria-label="Kies een sessie"></div>
   </section>
 
   <section class="call" aria-live="polite">
-    <div class="verdict">
-      <div id="bigTyre"></div>
-      <div><p class="when" id="when"></p><h2 id="verdict"></h2></div>
+    <div class="verdictbox">
+      <div class="verdict">
+        <div id="bigTyre"></div>
+        <div><p class="when" id="when"></p><h2 id="verdict"></h2></div>
+      </div>
+      <p class="reason" id="reason"></p>
     </div>
-    <p class="reason" id="reason"></p>
     <div id="clock"></div>
     <p class="count" id="count"></p>
-    <a class="zoom livebtn" id="live" href="https://f1-dash.com/" target="_blank" rel="noopener" hidden>Live timing openen</a>
     <p class="reason" id="actual" hidden></p>
     <div id="changes"></div>
     <button class="zoom" id="notify" type="button" hidden>Meldingen aan</button>
-    <dl class="stats" id="stats"></dl>
     <div id="problem"></div>
   </section>
 
+  <section class="trackbox">
+    <div id="track"></div>
+    <div>
+      <h2 class="label">Baan en wind</h2>
+      <p class="note" id="windNote" hidden></p>
+      <p class="record" id="record"></p>
+    </div>
+  </section>
+
+  <section class="liveblock">
+    <h2 class="label">Live tijdens de sessie</h2>
+    <p class="note" id="liveNote"></p>
+    <div class="links">
+      <a href="https://f1cosmos.com/dashboard/live" target="_blank" rel="noopener">F1 Cosmos</a>
+      <a href="https://f1livedata.com/laptimes" target="_blank" rel="noopener">F1 Live Data</a>
+      <a href="https://f1-dash.com/" target="_blank" rel="noopener">f1-dash</a>
+    </div>
+  </section>
+
   <section class="graph">
-    <div class="head"><h2 class="label">Regen over het weekend</h2><div id="track"></div></div>
-    <p class="note" id="windNote" hidden></p>
+    <h2 class="label">Regen over het weekend</h2>
     <div class="chart" id="chart"></div>
     <div class="legend"><span><i></i>mm regen per uur</span><span><i class="l"></i>kans op regen</span><span>Tijden in jouw tijdzone</span></div>
   </section>
@@ -182,7 +197,7 @@ footer a{color:inherit}
   <footer>
     <p id="updated"></p>
     <p>Gemaakt door lola-cola432, hoofd Natte Vingers en Bandenadvies.</p>
-    <p>De bandenkeuze is een eigen vuistregel op basis van de weersverwachting, geen teaminformatie. Weer: <a href="https://open-meteo.com/">Open-Meteo</a> (modellen van ECMWF, NOAA en DWD). Weather data by <a href="https://www.rainviewer.com/">RainViewer</a>. Kaart: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bijdragers. Circuitlijnen: <a href="https://github.com/bacinger/f1-circuits">f1-circuits</a> van Tomislav Bacinger (MIT), niet officieel. Live timing: <a href="https://f1-dash.com/">f1-dash</a>, niet officieel. Gemeten sessieweer: <a href="https://openf1.org/">OpenF1</a>, niet officieel. Sessietijden gecontroleerd op 4 november 2026.</p>
+    <p>De bandenkeuze is een eigen vuistregel op basis van de weersverwachting, geen teaminformatie. Weer: <a href="https://open-meteo.com/">Open-Meteo</a> (modellen van ECMWF, NOAA en DWD). Weather data by <a href="https://www.rainviewer.com/">RainViewer</a>. Kaart: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bijdragers. Circuitlijnen: <a href="https://github.com/bacinger/f1-circuits">f1-circuits</a> van Tomislav Bacinger (MIT), niet officieel. Live-links: F1 Cosmos, F1 Live Data en f1-dash, niet officieel en niet van Bandenkeuze. Gemeten sessieweer: <a href="https://openf1.org/">OpenF1</a>, niet officieel. Sessietijden gecontroleerd op 4 november 2026.</p>
   </footer>
 </main>
 <div class="toast" id="toast" role="status" hidden></div>
@@ -231,7 +246,7 @@ const clock = (t,tz) => fmt(tz,{hour:"2-digit",minute:"2-digit"}).format(t);
 const dayName = (t,tz) => fmt(tz,{weekday:"short"}).format(t);
 const longDay = (t,tz) => fmt(tz,{weekday:"long",day:"numeric",month:"long"}).format(t);
 const myTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-const num = (v,d=0) => v.toLocaleString("nl-NL",{minimumFractionDigits:d,maximumFractionDigits:d});
+const num = (v,d=0) => (v||0).toLocaleString("nl-NL",{minimumFractionDigits:d,maximumFractionDigits:d});
 const compass = deg => ["N","NO","O","ZO","Z","ZW","W","NW"][Math.round(deg/45)%8];
 
 function tyre(kind,size,cls=""){
@@ -290,7 +305,7 @@ function render(){
   $("title").textContent=r.name;
   $("sub").textContent=`${r.circuit}, ronde ${r.round}`;
   const rec=RECORDS[r.id];
-  $("record").innerHTML=`<b>${rec[0]}</b> Snelste raceronde: ${rec[1]} (${rec[2]})`;
+  $("record").innerHTML=`Snelste raceronde<b>${rec[0]}</b>${rec[1]} (${rec[2]})`;
   $("races").innerHTML=RACES.map(x=>`<button type="button" data-race="${x.id}" aria-pressed="${x===r}">${x.name}</button>`).join("");
   $("sessions").innerHTML=r.sessions.map(x=>{
     const sum=summarize(x,wx);
@@ -304,12 +319,16 @@ function render(){
   else if(state.failed && !wx) $("reason").textContent="De verwachting kon niet worden geladen.";
   else if(!wx) $("reason").textContent="Verwachting laden…";
   else $("reason").textContent=`De verwachting komt rond ${longDay(s.start-HORIZON,myTz)} beschikbaar.`;
-  $("stats").innerHTML=sum?[
-    ["Regenkans",`${num(sum.chance)}<span>%</span>`],
-    ["Lucht",`${num(sum.temp)}<span>°C</span>`],
-    ["Wind",`${num(sum.wind)}<span> km/u</span>`],
-    ["Uit",`<svg class="arrow" viewBox="0 0 24 24" style="transform:rotate(${sum.dir+180}deg)" aria-hidden="true"><path fill="currentColor" d="M12 1 20 22 12 17 4 22z"/></svg> ${compass(sum.dir)}`]
-  ].map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join(""):"";
+  const dash=v=>sum?v:"--";
+  $("stats").innerHTML=[
+    ["Lucht",dash(`${num(sum&&sum.temp)}<span>°C</span>`)],
+    ["Regenkans",dash(`${num(sum&&sum.chance)}<span>%</span>`)],
+    ["Vocht",dash(`${num(sum&&sum.hum)}<span>%</span>`)],
+    [sum?`km/u uit ${compass(sum.dir)}`:"Wind",dash(num(sum&&sum.wind))]
+  ].map(([k,v])=>`<div><dd>${v}</dd><dt>${k}</dt></div>`).join("");
+  const colors={slick:"var(--slick)",doubt:"var(--doubt)",inter:"var(--inter)",wet:"var(--wet)",none:"var(--muted)"};
+  $("status").textContent=call.text.toUpperCase();
+  $("status").style.color=colors[sum?sum.call:"none"];
   $("problem").innerHTML=state.failed?`<div class="problem">De weerdienst is hier niet bereikbaar. Open dit bestand in Safari of Chrome en controleer je verbinding.<button type="button" id="retry">Opnieuw proberen</button></div>`:"";
   tick();
   drawChart();
@@ -322,7 +341,9 @@ function render(){
 const tick=()=>{
   $("count").textContent=countdown(state.session);
   const now=Date.now();
-  $("live").hidden=!state.race.sessions.some(x=>now>=x.start-15*6e4&&now<=x.end+15*6e4);
+  const on=state.race.sessions.some(x=>now>=x.start-15*6e4&&now<=x.end+15*6e4);
+  document.querySelector(".liveblock").classList.toggle("on",on);
+  $("liveNote").textContent=on?"Er is nu een sessie, de links zijn live.":"Deze sites zijn vooral bruikbaar tijdens een sessie.";
 };
 
 function drawChart(){
@@ -378,7 +399,7 @@ function rainClock(s,wx){
     const c=Math.round(x.chance),on=c>=55;
     return `<div class="${x.t+HOUR>s.start&&x.t<s.end?"in":""}"><i style="background:color-mix(in srgb,var(--rain) ${Math.max(c,6)}%,var(--raised));color:${on?"var(--on-rain)":"var(--text)"}">${c}%</i>${clock(x.t,myTz).slice(0,2)}:00</div>`;
   }).join("");
-  box.innerHTML=`<p class="clockline">${line}</p><div class="strip" role="img" aria-label="Regenkans per uur rond de sessie">${cells}</div><p class="note">Regenkans per uur. De zwarte streep is de sessie.</p>`;
+  box.innerHTML=`<p class="clockline">${line}</p><div class="strip" role="img" aria-label="Regenkans per uur rond de sessie">${cells}</div><p class="note">Regenkans per uur. De witte streep is de sessie.</p>`;
 }
 
 const KEY=(r,s)=>`${r.id}/${s.id}`;
@@ -451,7 +472,7 @@ function drawTrack(){
   const k=Math.cos(r.lat*Math.PI/180),pts=c.map(([lon,lat])=>[lon*k,-lat]);
   const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);
   const x0=Math.min(...xs),y0=Math.min(...ys),w=Math.max(...xs)-x0,h=Math.max(...ys)-y0;
-  const VW=180,VH=120,pad=6,f=Math.min((VW-2*pad)/w,(VH-2*pad)/h);
+  const VW=170,VH=170,pad=6,f=Math.min((VW-2*pad)/w,(VH-2*pad)/h);
   const ox=(VW-w*f)/2,oy=(VH-h*f)/2;
   const sx=p=>(ox+(p[0]-x0)*f).toFixed(1),sy=p=>(oy+(p[1]-y0)*f).toFixed(1);
   const windy=sum&&sum.wind>=8,rad=sum?(sum.dir+180)*Math.PI/180:0,wx=Math.sin(rad),wy=Math.cos(rad);
@@ -530,8 +551,7 @@ let map,marker,rings=[],base,trackLine=null,zoomed=false;
 function initMap(){
   if(typeof L==="undefined"){ $("map").hidden=true; $("radarNote").textContent="De kaart kon niet laden. Controleer je verbinding en herlaad de pagina."; return; }
   map=L.map("map",{zoomControl:true,attributionControl:true,minZoom:4,maxZoom:15});
-  const dark=matchMedia("(prefers-color-scheme: dark)").matches;
-  base=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:15,className:dark?"dark-tiles":"",referrerPolicy:"strict-origin-when-cross-origin",attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bijdragers'}).addTo(map);
+  base=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:15,className:"dark-tiles",referrerPolicy:"strict-origin-when-cross-origin",attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bijdragers'}).addTo(map);
   map.attributionControl.addAttribution('<a href="https://www.rainviewer.com/">RainViewer</a>');
   placeMap();
   loadRadar();
