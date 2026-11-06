@@ -84,6 +84,16 @@ h1{font:700 clamp(2.6rem,12vw,4rem)/1 var(--display);margin-top:.15rem}
 .facts dd{margin:0;font:600 1.3rem/1.15 var(--display)}
 .techblock h3{margin:1rem 0 0;font:600 1.1rem/1.2 var(--display)}
 .windline{margin-top:.5rem;font-size:.9rem}
+.picks{display:grid;gap:.75rem;margin-top:.5rem}
+.pickcard{background:var(--raised);padding:.85rem}
+.pickcard h3{margin:0 0 .4rem;font:600 1.15rem var(--display)}
+.pickform{display:grid;gap:.4rem}
+.pickform label{display:grid;grid-template-columns:1.6rem minmax(0,1fr);align-items:center;gap:.4rem;font:600 1.1rem var(--display)}
+.pickform select,.pickform input{min-height:44px;width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);padding:0 .5rem;font:inherit;font-size:1rem}
+.mine{font:600 1.4rem var(--display);margin:0}
+.result{margin:.4rem 0 0}
+.result b{font-family:var(--display);font-size:1.15rem}
+.linkbtn{min-height:44px;color:var(--text);text-decoration:underline;font-weight:600}
 .preds{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin-top:.5rem}
 .preds h3{margin:0 0 .25rem;font:600 1.1rem var(--display)}
 .preds ol{margin:0;padding:0;list-style:none}
@@ -180,7 +190,8 @@ footer a{color:inherit}
   </section>
 
   <section class="predblock">
-    <h2 class="label">Top 3-indicatie</h2>
+    <h2 class="label">Jouw top 3</h2>
+    <p class="note">Voorspel de top 3 voordat de sessie begint. De uitslag blijft verborgen tot je zelf op de knop tikt.</p>
     <div id="predict"></div>
   </section>
 
@@ -219,7 +230,7 @@ footer a{color:inherit}
   <footer>
     <p id="updated"></p>
     <p>Gemaakt door lola-cola432, hoofd Natte Vingers en Bandenadvies.</p>
-    <p>De bandenkeuze is een eigen vuistregel op basis van de weersverwachting en de top 3 een rangschikking op rondetijden, geen teaminformatie of officiële voorspelling. Weer: <a href="https://open-meteo.com/">Open-Meteo</a> (modellen van ECMWF, NOAA en DWD). Weather data by <a href="https://www.rainviewer.com/">RainViewer</a>. Kaart: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bijdragers. Circuitlijnen: <a href="https://github.com/bacinger/f1-circuits">f1-circuits</a> van Tomislav Bacinger (MIT), niet officieel. Live timing: F1 Cosmos, niet officieel en niet van Bandenkeuze. Gemeten sessieweer: <a href="https://openf1.org/">OpenF1</a>, niet officieel. Sessietijden gecontroleerd op 4 november 2026.</p>
+    <p>De bandenkeuze is een eigen vuistregel op basis van de weersverwachting, geen teaminformatie. Je top 3 wordt alleen op dit toestel bewaard. Weer: <a href="https://open-meteo.com/">Open-Meteo</a> (modellen van ECMWF, NOAA en DWD). Weather data by <a href="https://www.rainviewer.com/">RainViewer</a>. Kaart: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bijdragers. Circuitlijnen: <a href="https://github.com/bacinger/f1-circuits">f1-circuits</a> van Tomislav Bacinger (MIT), niet officieel. Live timing: F1 Cosmos, niet officieel en niet van Bandenkeuze. Gemeten sessieweer: <a href="https://openf1.org/">OpenF1</a>, niet officieel. Sessietijden gecontroleerd op 4 november 2026.</p>
   </footer>
 </main>
 <div class="toast" id="toast" role="status" hidden></div>
@@ -358,7 +369,8 @@ function render(){
   rainClock(s,wx);
   drawActual();
   loadActual(r,s);
-  loadPredict(r);
+  drawPredict(r);
+  loadDrivers();
   $("times").innerHTML=r.sessions.map(x=>`<tr><th scope="row">${x.short}</th><td>${dayName(x.start,myTz)} ${clock(x.start,myTz)}</td><td>${dayName(x.start,r.tz)} ${clock(x.start,r.tz)}</td></tr>`).join("");
 }
 const tick=()=>{
@@ -533,53 +545,79 @@ function drawTech(r,sum,c){
   }).join("");
 }
 
-/* Top 3-indicatie op basis van de snelste rondes uit afgeronde sessies (OpenF1). */
-const lapTime=t=>`${Math.floor(t/60)}:${(t%60).toFixed(3).padStart(6,"0")}`;
-const top3=m=>Object.entries(m).sort((a,b)=>a[1]-b[1]).slice(0,3);
-const wait=ms=>new Promise(r=>setTimeout(r,ms));
-const predTried=new Set();
-async function loadPredict(r){
-  const done=r.sessions.slice(0,4).filter(s=>Date.now()>s.end+35*6e4);
-  drawPredict(r);
-  const key=r.id+done.length;
-  if(!done.length||predTried.has(key)) return;
-  predTried.add(key);
+/* Eigen top 3-voorspelling, alleen op dit toestel bewaard. Uitslag alleen na een tik. */
+let DRIVERS=null;
+async function loadDrivers(){
+  if(DRIVERS) return;
+  const cached=saved("drivers");
+  if(cached&&Date.now()-cached.at<2*DAY){ DRIVERS=cached.list; drawPredict(state.race); return; }
   try{
-    const store=saved("laps")||{};
-    const missing=done.filter(s=>!store[KEY(r,s)]);
-    if(!missing.length) return;
-    const list=await getJson("https://api.openf1.org/v1/sessions?year=2026");
-    for(const s of missing){
-      const hit=list.find(x=>Math.abs(Date.parse(x.date_start)-s.start)<HOUR);
-      if(!hit) continue;
-      await wait(500);
-      const laps=await getJson(`https://api.openf1.org/v1/laps?session_key=${hit.session_key}`);
-      await wait(500);
-      const drivers=await getJson(`https://api.openf1.org/v1/drivers?session_key=${hit.session_key}`);
-      const names={},best={};
-      drivers.forEach(d=>{ names[d.driver_number]=d.name_acronym; });
-      laps.forEach(l=>{
-        if(!l.lap_duration||l.is_pit_out_lap) return;
-        const n=names[l.driver_number]||String(l.driver_number);
-        if(!best[n]||l.lap_duration<best[n]) best[n]=l.lap_duration;
-      });
-      if(Object.keys(best).length){ store[KEY(r,s)]=best; save("laps",store); }
-    }
-  }catch(e){}
-  if(r===state.race) drawPredict(r);
+    const d=await getJson("https://api.openf1.org/v1/drivers?session_key=latest");
+    const seen={},list=[];
+    d.forEach(x=>{ if(x.name_acronym&&!seen[x.name_acronym]){ seen[x.name_acronym]=1; list.push({code:x.name_acronym,name:x.last_name||x.broadcast_name||x.name_acronym}); } });
+    if(list.length>=10){ DRIVERS=list.sort((a,b)=>a.code.localeCompare(b.code)); save("drivers",{at:Date.now(),list:DRIVERS}); }
+  }catch(e){ if(cached) DRIVERS=cached.list; }
+  drawPredict(state.race);
+}
+const pickKey=(r,s)=>`${r.id}/${s.id}`;
+function getPicks(){ return saved("picks")||{}; }
+function points(pick,res){
+  let p=0;
+  pick.forEach((c,i)=>{ if(res[i]===c) p+=3; else if(res.includes(c)) p+=1; });
+  return p;
+}
+function pickForm(r,s){
+  const k=pickKey(r,s),old=(getPicks()[k]||{}).p||["","",""];
+  const field=i=>DRIVERS
+    ? `<select data-pick="${i}" aria-label="Plek ${i+1}"><option value="">Kies…</option>${DRIVERS.map(d=>`<option value="${d.code}"${old[i]===d.code?" selected":""}>${d.code}, ${d.name}</option>`).join("")}</select>`
+    : `<input data-pick="${i}" maxlength="3" autocapitalize="characters" placeholder="Bijv. VER" aria-label="Plek ${i+1}" value="${old[i]}">`;
+  return `<form class="pickform" data-form="${s.id}">${[0,1,2].map(i=>`<label><span>${i+1}</span>${field(i)}</label>`).join("")}<button class="zoom" type="submit">Opslaan</button></form>`;
 }
 function drawPredict(r){
-  const store=saved("laps")||{},fp={};
-  const used=r.sessions.slice(0,3).filter(s=>store[KEY(r,s)]);
-  used.forEach(s=>{ Object.entries(store[KEY(r,s)]).forEach(([n,t])=>{ if(!fp[n]||t<fp[n]) fp[n]=t; }); });
-  const q=store[KEY(r,r.sessions[3])];
-  if(!used.length&&!q){
-    $("predict").innerHTML=`<p class="note">Verschijnt ongeveer een half uur na VT1. Dit is geen voorspelling door experts, maar een rangschikking op snelste rondes.</p>`;
-    return;
-  }
-  const list=rows=>`<ol>${rows.map(([n,t],i)=>`<li><b>${i+1}. ${n}</b><span>${lapTime(t)}</span></li>`).join("")}</ol>`;
-  const sum=summarize(r.sessions[4],state.wx[r.id]),raceWet=sum&&sum.call!=="slick";
-  $("predict").innerHTML=`<div class="preds"><div><h3>Kwalificatie</h3>${used.length?list(top3(fp)):'<p class="note">Geen trainingsdata.</p>'}</div><div><h3>Race</h3>${list(top3(q||fp))}</div></div><p class="note">${q?"Race op basis van de kwalificatie.":`Op basis van ${used.map(x=>x.short).join(", ")}.`} Snelle rondes zeggen niet alles: brandstof en motorstand verschillen per team.${raceWet?" Regen kan de racevolgorde flink veranderen.":""}</p>`;
+  if(r!==state.race) return;
+  const picks=getPicks(),results=saved("results")||{},now=Date.now(),closes=s=>`<p class="note">Sluit ${dayName(s.start,myTz)} ${clock(s.start,myTz)}.</p>`;
+  let html="";
+  [r.sessions[3],r.sessions[4]].forEach(s=>{
+    const k=pickKey(r,s),mine=picks[k],res=results[k];
+    html+=`<div class="pickcard"><h3>${s.label}</h3>`;
+    if(now<s.start){
+      if(mine&&!(state.editing&&state.editing[k])) html+=`<p class="mine">${mine.p.join(" · ")}</p><button class="linkbtn" type="button" data-edit="${s.id}">Aanpassen</button>`+closes(s);
+      else html+=pickForm(r,s)+closes(s);
+    }else{
+      html+=mine?`<p class="mine">${mine.p.join(" · ")}</p>`:`<p class="note">Je hebt niets ingevuld.</p>`;
+      if(now<s.end+35*6e4) html+=`<p class="note">Gesloten. De uitslag kun je zo'n half uur na de sessie bekijken.</p>`;
+      else if(res&&res.shown) html+=`<p class="result">Uitslag: <b>${res.top.join(" · ")}</b>${mine?`<br>Jouw score: <b>${points(mine.p,res.top)} van 9 punten</b>`:""}</p>`;
+      else html+=`<button class="zoom" type="button" data-reveal="${s.id}">Toon uitslag${mine?" en score":""}</button><p class="note" id="msg-${s.id}"></p>`;
+    }
+    html+=`</div>`;
+  });
+  let tp=0,tn=0;
+  Object.keys(picks).forEach(k=>{ const x=results[k]; if(x&&x.shown){ tp+=points(picks[k].p,x.top); tn++; } });
+  $("predict").innerHTML=`<div class="picks">${html}</div>`+(tn?`<p class="note">Seizoensscore op dit toestel: ${tp} punten uit ${tn} voorspellingen.</p>`:"")+`<p class="note">3 punten voor de juiste plek, 1 punt als de coureur wel in de top 3 staat.</p>`;
+}
+async function revealResult(r,s){
+  const k=pickKey(r,s),results=saved("results")||{},msg=$("msg-"+s.id);
+  if(results[k]){ results[k].shown=true; save("results",results); drawPredict(r); return; }
+  if(msg) msg.textContent="Uitslag ophalen…";
+  try{
+    const list=await getJson("https://api.openf1.org/v1/sessions?year=2026");
+    const hit=list.find(x=>Math.abs(Date.parse(x.date_start)-s.start)<HOUR);
+    if(!hit) throw new Error("geen sessie");
+    const drivers=await getJson(`https://api.openf1.org/v1/drivers?session_key=${hit.session_key}`),names={};
+    drivers.forEach(d=>{ names[d.driver_number]=d.name_acronym; });
+    let top=[];
+    try{
+      const res=await getJson(`https://api.openf1.org/v1/session_result?session_key=${hit.session_key}`);
+      top=res.filter(x=>x.position>=1&&x.position<=3).sort((a,b)=>a.position-b.position).map(x=>names[x.driver_number]);
+    }catch(e){}
+    if(top.length<3){
+      const pos=await getJson(`https://api.openf1.org/v1/position?session_key=${hit.session_key}`),last={};
+      pos.forEach(x=>{ last[x.driver_number]=x.position; });
+      top=Object.entries(last).sort((a,b)=>a[1]-b[1]).slice(0,3).map(([n])=>names[n]);
+    }
+    if(top.length<3||top.some(x=>!x)) throw new Error("onvolledig");
+    results[k]={top,shown:true}; save("results",results); drawPredict(r);
+  }catch(e){ if(msg) msg.textContent="De uitslag is nog niet beschikbaar. Probeer het later opnieuw."; }
 }
 
 /* Baanlayout: lengte- en breedtegraden omrekenen naar een lijn die in het vak past. */
@@ -746,6 +784,9 @@ function tyreJoke(){
 }
 document.addEventListener("click",e=>{
   const race=e.target.closest("[data-race]"),ses=e.target.closest("[data-session]");
+  const edit=e.target.closest("[data-edit]"),reveal=e.target.closest("[data-reveal]");
+  if(edit){ state.editing={...(state.editing||{}),[pickKey(state.race,state.race.sessions.find(x=>x.id===edit.dataset.edit))]:true}; drawPredict(state.race); return; }
+  if(reveal){ revealResult(state.race,state.race.sessions.find(x=>x.id===reveal.dataset.reveal)); return; }
   if(race) chooseRace(RACES.find(x=>x.id===race.dataset.race));
   else if(ses){ state.session=state.race.sessions.find(x=>x.id===ses.dataset.session); render(); }
   else if(e.target.id==="retry"){ state.failed=false; render(); loadWeather(state.race); }
@@ -754,6 +795,17 @@ document.addEventListener("click",e=>{
   else if(e.target.id==="play"){ if(state.frames.length) setPlaying(!state.playing); }
 });
 $("bigTyre").addEventListener("pointerup",tyreJoke);
+document.addEventListener("submit",e=>{
+  const f=e.target.closest("[data-form]"); if(!f) return;
+  e.preventDefault();
+  const s=state.race.sessions.find(x=>x.id===f.dataset.form),k=pickKey(state.race,s);
+  const p=[...f.querySelectorAll("[data-pick]")].map(x=>x.value.trim().toUpperCase());
+  if(Date.now()>=s.start){ drawPredict(state.race); return; }
+  if(p.some(x=>!/^[A-Z]{3}$/.test(x))||new Set(p).size<3){ alert("Kies drie verschillende coureurs."); return; }
+  const picks=getPicks(); picks[k]={p,at:Date.now()}; save("picks",picks);
+  if(state.editing) delete state.editing[k];
+  drawPredict(state.race);
+});
 $("frame").addEventListener("input",e=>{ setPlaying(false); showFrame(+e.target.value); });
 addEventListener("resize",()=>{ drawChart(); if(map) map.invalidateSize(); });
 document.addEventListener("visibilitychange",()=>{
